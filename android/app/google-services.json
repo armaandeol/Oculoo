@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "602958300866",
+    "project_id": "oculoo02",
+    "storage_bucket": "oculoo02.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:602958300866:android:1b4f264d83b2a5ad611d5b",
+        "android_client_info": {
+          "package_name": "com.example.oculoo02"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAAbBcmi6f0yXnEbBniiGjVwCbQYkATSiQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
