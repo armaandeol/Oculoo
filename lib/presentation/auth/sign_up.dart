@@ -4,10 +4,50 @@ import 'package:oculoo02/presentation/widgets/basic_app_button.dart';
 import 'package:oculoo02/presentation/widgets/isdoctor.dart';
 import 'package:oculoo02/core/configs/theme/app_color.dart';
 import 'package:oculoo02/presentation/widgets/textfield.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:oculoo02/Patient/home_screen.dart';
 
 
 class SignUp extends StatelessWidget {
-  const SignUp({super.key});
+  
+  TextEditingController nameController = TextEditingController();
+  TextEditingController emailController = TextEditingController();
+  TextEditingController passwordController = TextEditingController();
+  TextEditingController cpasswordController = TextEditingController();
+
+
+  void createAccount(BuildContext context) async {
+    String email = emailController.text.trim();
+    String password = passwordController.text.trim();
+    String cpassword = cpasswordController.text.trim();
+
+    if(email == '' || password == '' || cpassword == '') {
+      print("Please fill in all the details");
+    }
+    else if (password != cpassword) {
+      print("password does not match");
+    }
+    else{
+      try{
+        UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: password);
+        print("User created");
+        if(userCredential.user != null) {
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => HomeScreen()));
+        }
+      } on FirebaseAuthException catch(ex){
+        print(ex.code.toString());
+      }
+
+      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password);
+      print("User created"); 
+    }
+  }
+
+  // const SignUp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -29,24 +69,27 @@ class SignUp extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
               child: IsGuardian(),
             ),
-            Textfield(lbl: "Full Name"),
-            Textfield(lbl: "Email"),
+            Textfield(lbl: "Full Name",controller: nameController),
+            Textfield(lbl: "Email",controller: emailController),
             Textfield(
               lbl: "Password",
+              controller: passwordController,
               obscureText: true,
               icon: Icons.visibility_off,
             ),
             Textfield(
               lbl: "Confirm Password",
+              controller: cpasswordController,
               obscureText: true,
               icon: Icons.visibility_off,
             ),
             BasicAppButton(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => SignIn()),
-                );
+                createAccount(context);
+                // Navigator.push(
+                //   context,
+                //   MaterialPageRoute(builder: (context) => SignIn()),
+                // );
               },
               child: Text(
                 "Sign Up",
