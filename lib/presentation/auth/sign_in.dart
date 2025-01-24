@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:oculoo02/presentation/auth/sign_up.dart';
 import 'package:oculoo02/presentation/widgets/basic_app_button.dart';
-import 'package:oculoo02/presentation/widgets/isdoctor.dart';
+import 'package:oculoo02/presentation/widgets/isPatient.dart';
 import 'package:oculoo02/core/configs/theme/app_color.dart';
 import 'package:oculoo02/presentation/widgets/textfield.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -32,7 +32,7 @@ class SignIn extends StatelessWidget{
 
           Navigator.popUntil(context, (route) => route.isFirst);
 
-          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => HomeScreen()));
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => HomePage()));
           print("Logged in");
         }
       }on FirebaseAuthException catch(ex){

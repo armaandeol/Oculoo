@@ -1,0 +1,139 @@
+{
+  "medicines": [
+    {
+      "name": "Paracetamol",
+      "dosage": "500 mg",
+      "form": "Pill",
+      "schedule": [
+        {"time": "8:00 AM", "status": "Pending"},
+        {"time": "2:00 PM", "status": "Pending"},
+        {"time": "8:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Ibuprofen",
+      "dosage": "200 mg",
+      "form": "Pill",
+      "schedule": [
+        {"time": "9:00 AM", "status": "Pending"},
+        {"time": "3:00 PM", "status": "Pending"},
+        {"time": "9:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Amoxicillin",
+      "dosage": "250 mg",
+      "form": "Capsule",
+      "schedule": [
+        {"time": "7:00 AM", "status": "Pending"},
+        {"time": "11:00 AM", "status": "Pending"},
+        {"time": "7:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Metformin",
+      "dosage": "500 mg",
+      "form": "Tablet",
+      "schedule": [
+        {"time": "8:00 AM", "status": "Pending"},
+        {"time": "8:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Aspirin",
+      "dosage": "100 mg",
+      "form": "Tablet",
+      "schedule": [
+        {"time": "8:00 AM", "status": "Pending"},
+        {"time": "2:00 PM", "status": "Pending"},
+        {"time": "8:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Cetirizine",
+      "dosage": "10 mg",
+      "form": "Tablet",
+      "schedule": [
+        {"time": "10:00 AM", "status": "Pending"},
+        {"time": "10:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Omeprazole",
+      "dosage": "20 mg",
+      "form": "Capsule",
+      "schedule": [
+        {"time": "6:30 AM", "status": "Pending"},
+        {"time": "6:30 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Losartan",
+      "dosage": "50 mg",
+      "form": "Tablet",
+      "schedule": [
+        {"time": "7:00 AM", "status": "Pending"},
+        {"time": "7:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Simvastatin",
+      "dosage": "40 mg",
+      "form": "Tablet",
+      "schedule": [
+        {"time": "9:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Doxycycline",
+      "dosage": "100 mg",
+      "form": "Capsule",
+      "schedule": [
+        {"time": "8:00 AM", "status": "Pending"},
+        {"time": "8:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Clopidogrel",
+      "dosage": "75 mg",
+      "form": "Tablet",
+      "schedule": [
+        {"time": "7:30 AM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Loratadine",
+      "dosage": "10 mg",
+      "form": "Tablet",
+      "schedule": [
+        {"time": "6:00 AM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Vitamin D3",
+      "dosage": "1000 IU",
+      "form": "Capsule",
+      "schedule": [
+        {"time": "12:00 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Gabapentin",
+      "dosage": "300 mg",
+      "form": "Capsule",
+      "schedule": [
+        {"time": "7:00 AM", "status": "Pending"},
+        {"time": "3:00 PM", "status": "Pending"},
+        {"time": "11:30 PM", "status": "Pending"}
+      ]
+    },
+    {
+      "name": "Levothyroxine",
+      "dosage": "50 mcg",
+      "form": "Tablet",
+      "schedule": [
+        {"time": "6:00 AM", "status": "Pending"}
+      ]
+    }
+  ]
+}

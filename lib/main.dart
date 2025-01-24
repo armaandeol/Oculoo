@@ -1,8 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:oculoo02/presentation/landing/pages/onboard_screen.dart';
+import 'package:oculoo02/presentation/auth/sign_in.dart';
 import 'firebase_options.dart';
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,10 +23,11 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),
-      home: Scaffold(
-        backgroundColor: Colors.white,
-        body: OnboardScreen(),
-      ),
+      home: SignIn()
+      // home:(
+      //   FirebaseAuth.instance.currentUser != null ? HomePage() : 
+      //   OnboardScreen()
+      //   )
     );
   }
 }
