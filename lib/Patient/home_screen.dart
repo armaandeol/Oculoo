@@ -264,7 +264,70 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
               ),
+              // Add this section under the Medications Reminders section
+              const SizedBox(height: 20),
+              const Text(
+                "Medicine Logs",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColor.primary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('patient')
+                    .doc(uid)
+                    .collection('Logs')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const CircularProgressIndicator();
+                  }
+                  if (snapshot.hasError) {
+                    return const Text(
+                      'Error fetching logs',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.red,
+                      ),
+                    );
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Text(
+                      'No logs found.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.black54,
+                      ),
+                    );
+                  }
 
+                  final logs = snapshot.data!.docs;
+
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: logs.length,
+                    itemBuilder: (context, index) {
+                      final log = logs[index].data() as Map<String, dynamic>;
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 5),
+                        child: ListTile(
+                          title: Text(log['summary'] ?? 'No Summary'),
+                          subtitle: Text(
+                            "Medicine: ${log['medicine']}\n"
+                            "Dosage: ${log['dosage']} ${log['unit']}\n"
+                            "Time: ${log['time']}\n"
+                            "Date: ${log['date']}",
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
               // Recent Reminders section to be handled later
               // -------------------------------------
             ],
