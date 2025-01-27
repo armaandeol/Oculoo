@@ -13,16 +13,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Number of dates to display in the scrollable row
   final int numberOfDays = 12; // Display next 12 dates
   late DateTime _startDate;
-  DateTime? _selectedDate; // Track the selected date
+  DateTime? _selectedDate;
 
   @override
   void initState() {
     super.initState();
     _startDate = DateTime.now();
-    _selectedDate = _startDate; // Automatically select today's date
+    _selectedDate = _startDate;
   }
 
   String getGreeting() {
@@ -36,14 +35,12 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Method to check if two dates are the same day
   bool isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year &&
            date1.month == date2.month &&
            date1.day == date2.day;
   }
 
-  // Function to generate the list of next 12 dates
   List<DateTime> _generateDates() {
     return List.generate(
       numberOfDays,
@@ -58,9 +55,9 @@ class _HomePageState extends State<HomePage> {
     final height = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      backgroundColor: AppColor.background, // Use AppColor.background for the background
-      bottomNavigationBar: const BottomNavBarCustome(), // Positioned at the bottom
-      body: SingleChildScrollView( // Make the content scrollable
+      backgroundColor: AppColor.background,
+      bottomNavigationBar: const BottomNavBarCustome(),
+      body: SingleChildScrollView(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           margin: const EdgeInsets.all(10),
@@ -69,25 +66,26 @@ class _HomePageState extends State<HomePage> {
             borderRadius: BorderRadius.circular(30),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, // Align children to the start
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                height: height * 0.065,
-              ),
+              SizedBox(height: height * 0.065),
 
-              // Greeting Text
-              Text(
-                getGreeting(),
-                style: const TextStyle(
-                  fontSize: 24,
-                  color: AppColor.primary, // Set color to AppColor.primary
+              // Greeting Text with Animation
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                child: Text(
+                  getGreeting(),
+                  key: ValueKey<String>(getGreeting()),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    color: AppColor.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              SizedBox(
-                height: height * 0.01,
-              ),
+              SizedBox(height: height * 0.01),
 
-              // User's Name below the greeting
+              // User's Name with Fade Animation
               StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('patient')
@@ -118,50 +116,66 @@ class _HomePageState extends State<HomePage> {
                     );
                   }
 
-                  final userData =
-                      snapshot.data!.data() as Map<String, dynamic>;
+                  final userData = snapshot.data!.data() as Map<String, dynamic>;
                   final userName = userData['name'] ?? 'User';
 
-                  return Text(
-                    userName,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColor.primary,
+                  return FadeIn(
+                    child: Text(
+                      userName,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: AppColor.primary,
+                      ),
                     ),
                   );
                 },
               ),
-              SizedBox(
-                height: height * 0.02,
-              ),
+              SizedBox(height: height * 0.02),
 
-              // Horizontally Scrollable Date Row
+              // Horizontally Scrollable Date Row with Gradient and Shadows
               SizedBox(
-                height: 80, // Adjust the height as needed
+                height: 100,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: numberOfDays,
                   itemBuilder: (context, index) {
                     final date = _startDate.add(Duration(days: index));
-                    final dayName = DateFormat.E().format(date); // Mon, Tue, etc.
-                    final dayNumber = DateFormat.d().format(date); // 1, 2, etc.
+                    final dayName = DateFormat.E().format(date);
+                    final dayNumber = DateFormat.d().format(date);
                     final isSelected = _selectedDate != null && isSameDay(date, _selectedDate!);
 
                     return GestureDetector(
                       onTap: () {
                         setState(() {
                           _selectedDate = date;
-                          // Handle any additional logic for the selected date
                         });
                       },
-                      child: Container(
-                        width: 60, // Adjust the width as needed
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: 70,
                         margin: const EdgeInsets.symmetric(horizontal: 5),
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: isSelected ? AppColor.primary : Colors.grey.withOpacity(0.3), // Blue for selected, grey otherwise
-                          borderRadius: BorderRadius.circular(10),
+                          gradient: isSelected
+                              ? LinearGradient(
+                                  colors: [AppColor.primary, Colors.blueAccent],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                )
+                              : LinearGradient(
+                                  colors: [Colors.grey.withOpacity(0.3), Colors.grey.withOpacity(0.1)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isSelected ? AppColor.primary.withOpacity(0.5) : Colors.grey.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -171,7 +185,7 @@ class _HomePageState extends State<HomePage> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: isSelected ? Colors.white : Colors.black54, // White text for selected, grey for others
+                                color: isSelected ? Colors.white : Colors.black54,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -180,7 +194,7 @@ class _HomePageState extends State<HomePage> {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: isSelected ? Colors.white : Colors.black87, // White text for selected, dark grey for others
+                                color: isSelected ? Colors.white : Colors.black87,
                               ),
                             ),
                           ],
@@ -190,18 +204,27 @@ class _HomePageState extends State<HomePage> {
                   },
                 ),
               ),
-              SizedBox(
-                height: height * 0.02,
-              ),
+              SizedBox(height: height * 0.02),
 
               // Medications Reminders Section
               const SizedBox(height: 20),
-              const Text(
-                "Medications Reminders",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColor.primary,
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.grey.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: const Text(
+                  "Medications Reminders",
+                  style: TextStyle(
+                    fontSize: 24, // Increased font size
+                    fontWeight: FontWeight.bold,
+                    color: AppColor.primary,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -242,15 +265,39 @@ class _HomePageState extends State<HomePage> {
                     itemCount: medications.length,
                     itemBuilder: (context, index) {
                       final med = medications[index].data() as Map<String, dynamic>;
-                      return Card(
+                      return Container(
                         margin: const EdgeInsets.symmetric(vertical: 5),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.blue.shade100, Colors.blue.shade50],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
                         child: ListTile(
-                          title: Text(med['medicine'] ?? 'Unnamed Medicine'),
+                          title: Text(
+                            med['medicine'] ?? 'Unnamed Medicine',
+                            style: const TextStyle(
+                              fontSize: 18, // Increased font size
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           subtitle: Text(
                             "Dosage: ${med['dosage']} ${med['unit']}\n"
                             "Times: ${med['times'].join(', ')}\n"
                             "Frequency: ${med['frequency']}\n"
                             "Days: ${med['days']}",
+                            style: const TextStyle(
+                              fontSize: 16, // Increased font size
+                            ),
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
@@ -264,14 +311,26 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
               ),
-              // Add this section under the Medications Reminders section
+
+              // Medicine Logs Section
               const SizedBox(height: 20),
-              const Text(
-                "Medicine Logs",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColor.primary,
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.grey.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: const Text(
+                  "Medicine Logs",
+                  style: TextStyle(
+                    fontSize: 24, // Increased font size
+                    fontWeight: FontWeight.bold,
+                    color: AppColor.primary,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -312,15 +371,39 @@ class _HomePageState extends State<HomePage> {
                     itemCount: logs.length,
                     itemBuilder: (context, index) {
                       final log = logs[index].data() as Map<String, dynamic>;
-                      return Card(
+                      return Container(
                         margin: const EdgeInsets.symmetric(vertical: 5),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.green.shade100, Colors.green.shade50],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
                         child: ListTile(
-                          title: Text(log['summary'] ?? 'No Summary'),
+                          title: Text(
+                            log['summary'] ?? 'No Summary',
+                            style: const TextStyle(
+                              fontSize: 18, // Increased font size
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           subtitle: Text(
                             "Medicine: ${log['medicine']}\n"
                             "Dosage: ${log['dosage']} ${log['unit']}\n"
                             "Time: ${log['time']}\n"
                             "Date: ${log['date']}",
+                            style: const TextStyle(
+                              fontSize: 16, // Increased font size
+                            ),
                           ),
                         ),
                       );
@@ -328,12 +411,32 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
               ),
-              // Recent Reminders section to be handled later
-              // -------------------------------------
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+// FadeIn Animation Widget
+class FadeIn extends StatelessWidget {
+  final Widget child;
+
+  const FadeIn({Key? key, required this.child}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 500),
+      builder: (context, double value, child) {
+        return Opacity(
+          opacity: value,
+          child: child,
+        );
+      },
+      child: child,
     );
   }
 }

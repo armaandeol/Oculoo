@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// import 'package:flutter_time_picker_spinner/flutter_time_picker_spinner.dart'; // Add this to pubspec.yaml
 
 enum DateRangeOption { forever, thisMonth, custom }
 
@@ -22,12 +21,16 @@ class _PillReminderPageState extends State<PillReminderPage> {
   String _frequency = 'Daily';
   String _selectedWeeklyDay = 'Monday';
   Map<String, bool> _selectedCustomDays = {
-    'Mon': false, 'Tue': false, 'Wed': false,
-    'Thu': false, 'Fri': false, 'Sat': false, 'Sun': false
+    'Mon': false,
+    'Tue': false,
+    'Wed': false,
+    'Thu': false,
+    'Fri': false,
+    'Sat': false,
+    'Sun': false
   };
 
   DateRangeOption _dateRangeOption = DateRangeOption.forever;
-  
 
   void _onDateRangeOptionChanged(DateRangeOption? option) async {
     setState(() {
@@ -36,7 +39,6 @@ class _PillReminderPageState extends State<PillReminderPage> {
     final today = DateTime.now();
     if (option == DateRangeOption.forever) {
       _startDateController.text = _formatDate(today);
-      // Arbitrary far future date
       _endDateController.text = _formatDate(DateTime(today.year + 100, today.month, today.day));
     } else if (option == DateRangeOption.thisMonth) {
       final firstDay = DateTime(today.year, today.month, 1);
@@ -56,7 +58,6 @@ class _PillReminderPageState extends State<PillReminderPage> {
           _endDateController.text = _formatDate(range.end);
         });
       } else {
-        // Revert to previous selection if canceled
         _dateRangeOption = DateRangeOption.forever;
         _onDateRangeOptionChanged(_dateRangeOption);
       }
@@ -64,7 +65,7 @@ class _PillReminderPageState extends State<PillReminderPage> {
   }
 
   String _formatDate(DateTime date) {
-    return "${date.year}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')}";
+    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
   }
 
   Future<void> _pickTime(int index) async {
@@ -81,7 +82,7 @@ class _PillReminderPageState extends State<PillReminderPage> {
   }
 
   Widget _buildWeeklySelector() {
-    final days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+    final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     return Wrap(
       spacing: 8.0,
       children: days.map((day) {
@@ -91,6 +92,10 @@ class _PillReminderPageState extends State<PillReminderPage> {
           onSelected: (selected) {
             if (selected) setState(() => _selectedWeeklyDay = day);
           },
+          selectedColor: Colors.blueAccent,
+          labelStyle: TextStyle(
+            color: _selectedWeeklyDay == day ? Colors.white : Colors.black,
+          ),
         );
       }).toList(),
     );
@@ -107,6 +112,10 @@ class _PillReminderPageState extends State<PillReminderPage> {
           onSelected: (selected) {
             setState(() => _selectedCustomDays[dayLabel] = selected);
           },
+          selectedColor: Colors.blueAccent,
+          labelStyle: TextStyle(
+            color: _selectedCustomDays[dayLabel]! ? Colors.white : Colors.black,
+          ),
         );
       }).toList(),
     );
@@ -128,144 +137,18 @@ class _PillReminderPageState extends State<PillReminderPage> {
     }
   }
 
-
   Future<void> _showSummary() async {
-  // Validate required fields
-  if (_medicineController.text.isEmpty ||
-      _dosageController.text.isEmpty ||
-      _unitController.text.isEmpty ||
-      _startDateController.text.isEmpty ||
-      _endDateController.text.isEmpty ||
-      _timeControllers.any((controller) => controller.text.isEmpty)) {
-    // Show error dialog if any field is empty
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Incomplete Information"),
-        content: const Text("Please fill out all fields before setting a reminder."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
-          ),
-        ],
-      ),
-    );
-    return;
-  }
-
-  final daysSelected = _frequency == 'Weekly'
-      ? _selectedWeeklyDay
-      : _selectedCustomDays.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .join(", ");
-  final timesSummary = _timeControllers.map((c) => c.text).join(", ");
-
-  // Show summary dialog
-  bool? confirm = await showDialog<bool>(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text("Pill Reminder Summary"),
-      content: Text(
-        "Medicine: ${_medicineController.text}\n"
-        "Total Dosage: ${_dosageController.text} ${_unitController.text}\n"
-        "Times:\n - $timesSummary\n"
-        "Start Date: ${_startDateController.text}\n"
-        "End Date: ${_endDateController.text}\n"
-        "Frequency: $_frequency\n"
-        "Days: $daysSelected",
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text("Cancel"),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text("OK"),
-        ),
-      ],
-    ),
-  );
-
-  // If user confirms, store data to Firestore
-  if (confirm == true) {
-    try {
-      // Get the current user's UID
-      final User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        // Handle the case where the user is not authenticated
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text("Error"),
-            content: const Text("User is not authenticated. Please log in and try again."),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("OK"),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-
-      final String uid = user.uid;
-      print("User UID: $uid"); // Added debug statement
-
-      
-      // Reference to the patient's Medications subcollection
-      CollectionReference medicationsRef = FirebaseFirestore.instance
-          .collection('patient') // Ensured lowercase 'patient'
-          .doc(uid)
-          .collection('Medications');
-
-      // Get the current count of medications to assign the next ID
-      QuerySnapshot medicationsSnapshot = await medicationsRef.get();
-      int nextId = medicationsSnapshot.docs.length;
-
-      // Prepare data to send to Firestore
-      final Map<String, dynamic> reminderData = {
-        "medicine": _medicineController.text.trim(),
-        "dosage": _dosageController.text.trim(),
-        "unit": _unitController.text.trim(),
-        "times": _timeControllers.map((c) => c.text.trim()).toList(),
-        "start_date": _startDateController.text.trim(),
-        "end_date": _endDateController.text.trim(),
-        "frequency": _frequency,
-        "days": daysSelected,
-        "created_at": FieldValue.serverTimestamp(),
-      };
-
-      // Set the document with the incremental ID
-      await medicationsRef.doc(nextId.toString()).set(reminderData);
-
-      // Show success dialog
+    if (_medicineController.text.isEmpty ||
+        _dosageController.text.isEmpty ||
+        _unitController.text.isEmpty ||
+        _startDateController.text.isEmpty ||
+        _endDateController.text.isEmpty ||
+        _timeControllers.any((controller) => controller.text.isEmpty)) {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text("Success"),
-          content: const Text("Pill reminder has been set successfully."),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close success dialog
-                Navigator.pop(context); // Optionally navigate back or clear the form
-              },
-              child: const Text("OK"),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      // Handle Firestore write errors
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text("Error"),
-          content: const Text("Failed to set reminder. Please try again."),
+          title: const Text("Incomplete Information"),
+          content: const Text("Please fill out all fields before setting a reminder."),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -274,12 +157,120 @@ class _PillReminderPageState extends State<PillReminderPage> {
           ],
         ),
       );
-      print("Error adding medication: $e"); // For debugging
+      return;
+    }
+
+    final daysSelected = _frequency == 'Weekly'
+        ? _selectedWeeklyDay
+        : _selectedCustomDays.entries
+            .where((entry) => entry.value)
+            .map((entry) => entry.key)
+            .join(", ");
+    final timesSummary = _timeControllers.map((c) => c.text).join(", ");
+
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Pill Reminder Summary"),
+        content: Text(
+          "Medicine: ${_medicineController.text}\n"
+          "Total Dosage: ${_dosageController.text} ${_unitController.text}\n"
+          "Times:\n - $timesSummary\n"
+          "Start Date: ${_startDateController.text}\n"
+          "End Date: ${_endDateController.text}\n"
+          "Frequency: $_frequency\n"
+          "Days: $daysSelected",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final User? user = FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text("Error"),
+              content: const Text("User is not authenticated. Please log in and try again."),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("OK"),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+
+        final String uid = user.uid;
+        CollectionReference medicationsRef = FirebaseFirestore.instance
+            .collection('patient')
+            .doc(uid)
+            .collection('Medications');
+
+        QuerySnapshot medicationsSnapshot = await medicationsRef.get();
+        int nextId = medicationsSnapshot.docs.length;
+
+        final Map<String, dynamic> reminderData = {
+          "medicine": _medicineController.text.trim(),
+          "dosage": _dosageController.text.trim(),
+          "unit": _unitController.text.trim(),
+          "times": _timeControllers.map((c) => c.text.trim()).toList(),
+          "start_date": _startDateController.text.trim(),
+          "end_date": _endDateController.text.trim(),
+          "frequency": _frequency,
+          "days": daysSelected,
+          "created_at": FieldValue.serverTimestamp(),
+        };
+
+        await medicationsRef.doc(nextId.toString()).set(reminderData);
+
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("Success"),
+            content: const Text("Pill reminder has been set successfully."),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                },
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+      } catch (e) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("Error"),
+            content: const Text("Failed to set reminder. Please try again."),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+        print("Error adding medication: $e");
+      }
     }
   }
-}
-
-
 
   @override
   void dispose() {
@@ -297,103 +288,218 @@ class _PillReminderPageState extends State<PillReminderPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Pill Reminder")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          children: [
-            TextField(
-              controller: _medicineController,
-              decoration: const InputDecoration(labelText: "Medicine Name"),
-            ),
-            TextField(
-              controller: _dosageController,
-              decoration: const InputDecoration(labelText: "Total Dosage"),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: _unitController,
-              decoration: const InputDecoration(labelText: "Units (mg, ml, etc.)"),
-            ),
-            TextField(
-              decoration: const InputDecoration(labelText: "Number of Daily Dosages"),
-              keyboardType: TextInputType.number,
-              onChanged: _updateDosageTimes,
-            ),
-            const SizedBox(height: 10),
-            Column(
-              children: List.generate(_dosageCount, (index) {
-                return GestureDetector(
-                  onTap: () => _pickTime(index),
-                  child: AbsorbPointer(
-                    child: TextField(
-                      controller: _timeControllers[index],
-                      decoration: InputDecoration(
-                        labelText: "Time ${index+1}",
+      appBar: AppBar(
+        title: const Text("Pill Reminder"),
+        backgroundColor: Colors.blueAccent,
+        elevation: 0,
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade50, Colors.white],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ListView(
+            children: [
+              Card(
+                elevation: 5,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _medicineController,
+                        decoration: InputDecoration(
+                          labelText: "Medicine Name",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _dosageController,
+                        decoration: InputDecoration(
+                          labelText: "Total Dosage",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _unitController,
+                        decoration: InputDecoration(
+                          labelText: "Units (mg, ml, etc.)",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                );
-              }),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _startDateController,
-                    decoration: const InputDecoration(labelText: "Start Date"),
-                    readOnly: true,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Card(
+                elevation: 5,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      TextField(
+                        decoration: InputDecoration(
+                          labelText: "Number of Daily Dosages",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: _updateDosageTimes,
+                      ),
+                      const SizedBox(height: 10),
+                      Column(
+                        children: List.generate(_dosageCount, (index) {
+                          return GestureDetector(
+                            onTap: () => _pickTime(index),
+                            child: AbsorbPointer(
+                              child: TextField(
+                                controller: _timeControllers[index],
+                                decoration: InputDecoration(
+                                  labelText: "Time ${index + 1}",
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _endDateController,
-                    decoration: const InputDecoration(labelText: "End Date"),
-                    readOnly: true,
+              ),
+              const SizedBox(height: 20),
+              Card(
+                elevation: 5,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _startDateController,
+                              decoration: InputDecoration(
+                                labelText: "Start Date",
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              readOnly: true,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _endDateController,
+                              decoration: InputDecoration(
+                                labelText: "End Date",
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              readOnly: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Column(
+                        children: [
+                          RadioListTile<DateRangeOption>(
+                            title: const Text("Forever"),
+                            value: DateRangeOption.forever,
+                            groupValue: _dateRangeOption,
+                            onChanged: _onDateRangeOptionChanged,
+                          ),
+                          RadioListTile<DateRangeOption>(
+                            title: const Text("This Month"),
+                            value: DateRangeOption.thisMonth,
+                            groupValue: _dateRangeOption,
+                            onChanged: _onDateRangeOptionChanged,
+                          ),
+                          RadioListTile<DateRangeOption>(
+                            title: const Text("Custom Range"),
+                            value: DateRangeOption.custom,
+                            groupValue: _dateRangeOption,
+                            onChanged: _onDateRangeOptionChanged,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Column(
-              children: [
-                RadioListTile<DateRangeOption>(
-                  title: const Text("Forever"),
-                  value: DateRangeOption.forever,
-                  groupValue: _dateRangeOption,
-                  onChanged: _onDateRangeOptionChanged,
+              ),
+              const SizedBox(height: 20),
+              Card(
+                elevation: 5,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                RadioListTile<DateRangeOption>(
-                  title: const Text("This Month"),
-                  value: DateRangeOption.thisMonth,
-                  groupValue: _dateRangeOption,
-                  onChanged: _onDateRangeOptionChanged,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      DropdownButton<String>(
+                        value: _frequency,
+                        items: ["Daily", "Weekly", "Custom"].map((value) {
+                          return DropdownMenuItem(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: (val) => setState(() => _frequency = val!),
+                      ),
+                      if (_frequency == 'Weekly') _buildWeeklySelector(),
+                      if (_frequency == 'Custom') _buildCustomSelector(),
+                    ],
+                  ),
                 ),
-                RadioListTile<DateRangeOption>(
-                  title: const Text("Custom Range"),
-                  value: DateRangeOption.custom,
-                  groupValue: _dateRangeOption,
-                  onChanged: _onDateRangeOptionChanged,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _showSummary,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-              ],
-            ),
-            DropdownButton<String>(
-              value: _frequency,
-              items: ["Daily", "Weekly", "Custom"].map((value) {
-                return DropdownMenuItem(value: value, child: Text(value));
-              }).toList(),
-              onChanged: (val) => setState(() => _frequency = val!),
-            ),
-            if (_frequency == 'Weekly') _buildWeeklySelector(),
-            if (_frequency == 'Custom') _buildCustomSelector(),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _showSummary,
-              child: const Text("Set Reminder"),
-            ),
-          ],
+                child: const Text(
+                  "Set Reminder",
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
