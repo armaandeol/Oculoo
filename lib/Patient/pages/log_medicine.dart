@@ -47,7 +47,7 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
 
   Future<void> notifyFlaskServer(String imageUrl) async {
     final User? user = FirebaseAuth.instance.currentUser;
-    final url = Uri.parse('http://10.162.158.134:5000/process_image'); // Replace with your Flask server URL
+    final url = Uri.parse('http://10.55.134.220:5000/process_image'); // Replace with your Flask server URL
     final String uid = user?.uid ?? '';
     
     if (uid.isEmpty) {

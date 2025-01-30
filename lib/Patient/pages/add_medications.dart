@@ -371,18 +371,32 @@ class _PillReminderPageState extends State<PillReminderPage> {
                       const SizedBox(height: 10),
                       Column(
                         children: List.generate(_dosageCount, (index) {
-                          return GestureDetector(
-                            onTap: () => _pickTime(index),
-                            child: AbsorbPointer(
-                              child: TextField(
-                                controller: _timeControllers[index],
-                                decoration: InputDecoration(
-                                  labelText: "Time ${index + 1}",
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0), // Vertical spacing
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => _pickTime(index),
+                                    child: AbsorbPointer(
+                                      child: TextField(
+                                        controller: _timeControllers[index],
+                                        decoration: InputDecoration(
+                                          labelText: "Time ${index + 1}",
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          contentPadding: const EdgeInsets.symmetric(
+                                            vertical: 12,
+                                            horizontal: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
+                                const SizedBox(width: 16), // Horizontal spacing
+                              ],
                             ),
                           );
                         }),
