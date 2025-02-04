@@ -4,9 +4,9 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:oculoo02/presentation/widgets/bottom_nav_bar.dart';
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:oculoo02/presentation/auth/sign_in.dart'; // Import SignIn page
 
 class LogMedicinePage extends StatefulWidget {
   @override
@@ -37,19 +37,17 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
         .child('images/${DateTime.now().toIso8601String()}');
 
     final uploadTask = storageRef.putFile(imageFile);
-
     final snapshot = await uploadTask.whenComplete(() => null);
-
     final imageUrl = await snapshot.ref.getDownloadURL();
-
     return imageUrl;
   }
 
   Future<void> notifyFlaskServer(String imageUrl) async {
     final User? user = FirebaseAuth.instance.currentUser;
-    final url = Uri.parse('http://10.55.134.220:5000/process_image'); // Replace with your Flask server URL
+    final url = Uri.parse(
+        'http://127.0.0.1:4040/process_image'); // Replace with your Flask server URL
     final String uid = user?.uid ?? '';
-    
+
     if (uid.isEmpty) {
       print('UID is missing');
       return;
@@ -94,7 +92,8 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context); // Close success dialog
-                Navigator.pop(context); // Optionally navigate back or clear the form
+                Navigator.pop(
+                    context); // Optionally navigate back or clear the form
               },
               child: const Text("OK"),
             ),
@@ -124,24 +123,36 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
     return Scaffold(
       bottomNavigationBar: const BottomNavBarCustome(),
       appBar: AppBar(
-        title: Text('Log Medicine'),
+        title: const Text('Log Medicine'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.exit_to_app),
+            tooltip: 'Sign Out',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => SignIn()),
+              );
+            },
+          )
+        ],
       ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             _image == null
-                ? Text('No image selected.')
+                ? const Text('No image selected.')
                 : Image.file(_image!),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _pickImage,
-              child: Text('Pick Image'),
+              child: const Text('Pick Image'),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _uploadImage,
-              child: Text('Upload Image'),
+              child: const Text('Upload Image'),
             ),
           ],
         ),

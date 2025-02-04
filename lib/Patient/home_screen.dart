@@ -339,43 +339,77 @@ StreamBuilder<QuerySnapshot>(
   }
 
   Widget _buildLogItem(Map<String, dynamic> log, Size size) {
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: size.height * 0.005),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.green.shade100, Colors.green.shade50],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: size.width * 0.04,
-          vertical: size.height * 0.01,
-        ),
-        title: Text(
-          log['summary'] ?? 'No Summary',
-          style: TextStyle(
-            fontSize: size.width * 0.045,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Text(
-          "${log['medicine']} - ${log['dosage']}${log['unit']}\n"
-          "${log['time']} • ${log['date']}",
-          style: TextStyle(fontSize: size.width * 0.035),
-        ),
-      ),
-    );
+  // Extract relevant information from the OCR summary
+  final summary = log['summary'] as List<dynamic>? ?? [];
+  String medicine = 'Unknown Medicine';
+  String dosage = 'Unknown Dosage';
+  String unit = '';
+  String time = 'Unknown Time';
+  String date = 'Unknown Date';
+
+  // Parse the OCR summary to extract medicine, dosage, etc.
+  if (summary.isNotEmpty) {
+    // Example: Assume the first detected text is the medicine name
+    medicine = summary[0]['text'] ?? 'Unknown Medicine';
+
+    // Example: Assume the second detected text is the dosage
+    if (summary.length > 1) {
+      dosage = summary[1]['text'] ?? 'Unknown Dosage';
+    }
+
+    // Example: Assume the third detected text is the unit
+    if (summary.length > 2) {
+      unit = summary[2]['text'] ?? '';
+    }
+
+    // Example: Assume the fourth detected text is the time
+    if (summary.length > 3) {
+      time = summary[3]['text'] ?? 'Unknown Time';
+    }
+
+    // Example: Assume the fifth detected text is the date
+    if (summary.length > 4) {
+      date = summary[4]['text'] ?? 'Unknown Date';
+    }
   }
+
+  return Container(
+    margin: EdgeInsets.symmetric(vertical: size.height * 0.005),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.green.shade100, Colors.green.shade50],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(15),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.2),
+          blurRadius: 8,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: ListTile(
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: size.width * 0.04,
+        vertical: size.height * 0.01,
+      ),
+      title: Text(
+        medicine,
+        style: TextStyle(
+          fontSize: size.width * 0.045,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: Text(
+        "$dosage$unit\n"
+        "$time • $date",
+        style: TextStyle(fontSize: size.width * 0.035),
+      ),
+    ),
+  );
+}
 }
 
 class FadeIn extends StatelessWidget {

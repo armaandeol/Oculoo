@@ -2,19 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:oculoo02/presentation/auth/sign_in.dart';
-import 'package:oculoo02/presentation/widgets/basic_app_button.dart';
 import 'package:oculoo02/presentation/widgets/isPatient.dart';
 import 'package:oculoo02/core/configs/theme/app_color.dart';
 import 'package:oculoo02/presentation/widgets/textfield.dart';
 import 'package:oculoo02/Patient/home_screen.dart';
+import 'package:oculoo02/Guardian/home.dart'; // Import Guardian home
 
-class SignUp extends StatelessWidget {
-  SignUp({Key? key}) : super(key: key);
+class SignUp extends StatefulWidget {
+  const SignUp({Key? key}) : super(key: key);
 
+  @override
+  State<SignUp> createState() => _SignUpState();
+}
+
+class _SignUpState extends State<SignUp> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController cpasswordController = TextEditingController();
+  bool _isGuardian = false;
 
   Future<void> createAccount(BuildContext context) async {
     String name = nameController.text.trim();
@@ -22,15 +28,18 @@ class SignUp extends StatelessWidget {
     String password = passwordController.text.trim();
     String cpassword = cpasswordController.text.trim();
 
-    // Check empty fields
-    if (name.isEmpty || email.isEmpty || password.isEmpty || cpassword.isEmpty) {
+    // Check for empty fields
+    if (name.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty ||
+        cpassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please fill in all the details")),
       );
       return;
     }
 
-    // Check password match
+    // Check if passwords match
     if (password != cpassword) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Passwords do not match")),
@@ -39,14 +48,18 @@ class SignUp extends StatelessWidget {
     }
 
     try {
-      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      // Create the user account via Firebase Authentication
+      UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
       String uid = userCredential.user!.uid;
-      String role = 'patient';
+      // Determine role based on toggle
+      String role = _isGuardian ? 'guardian' : 'patient';
 
+      // Save user details in Firestore under the appropriate collection
       await FirebaseFirestore.instance.collection(role).doc(uid).set({
         'name': name,
         'email': email,
@@ -57,10 +70,17 @@ class SignUp extends StatelessWidget {
         const SnackBar(content: Text("Account created successfully!")),
       );
 
+      // Clear the navigation stack and redirect based on user role
       Navigator.popUntil(context, (route) => route.isFirst);
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => HomePage()),
-      );
+      if (role == 'patient') {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      } else if (role == 'guardian') {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => GuardianHomePage()),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       String errorMessage = "An error occurred. Please try again.";
       if (e.code == 'weak-password') {
@@ -81,12 +101,11 @@ class SignUp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColor.background, // Set background color
+      backgroundColor: AppColor.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Logo or Image
               ClipOval(
@@ -129,6 +148,13 @@ class SignUp extends StatelessWidget {
                 icon: Icons.visibility_off,
               ),
               const SizedBox(height: 25),
+              IsGuardian(
+                onChanged: (value) {
+                  setState(() {
+                    _isGuardian = value; // Update the toggle state
+                  });
+                },
+              ),
 
               // Sign Up Button
               SizedBox(
@@ -137,7 +163,8 @@ class SignUp extends StatelessWidget {
                   onPressed: () => createAccount(context),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    backgroundColor: Colors.blue, // Customize button color
+                    backgroundColor:
+                        Colors.blue, // Customize button color if needed
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
