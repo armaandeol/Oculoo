@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),
-      home: const AuthWrapper(),
+      home: GuardianHomePage(),
       // home: SignIn()
       // // home:(
       // //   FirebaseAuth.instance.currentUser != null ? HomePage() :

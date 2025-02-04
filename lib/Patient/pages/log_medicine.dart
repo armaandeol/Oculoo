@@ -6,6 +6,8 @@ import 'package:oculoo02/presentation/widgets/bottom_nav_bar.dart';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:flutter/services.dart'; // For copying UID to clipboard
 import 'package:oculoo02/presentation/auth/sign_in.dart'; // Import SignIn page
 
 class LogMedicinePage extends StatefulWidget {
@@ -18,6 +20,7 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
   final picker = ImagePicker();
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final User? user = FirebaseAuth.instance.currentUser;
 
   Future<void> _pickImage() async {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -43,7 +46,6 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
   }
 
   Future<void> notifyFlaskServer(String imageUrl) async {
-    final User? user = FirebaseAuth.instance.currentUser;
     final url = Uri.parse(
         'http://127.0.0.1:4040/process_image'); // Replace with your Flask server URL
     final String uid = user?.uid ?? '';
@@ -118,6 +120,64 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
     }
   }
 
+  Future<void> _showQRCodeDialog(BuildContext context) async {
+    // Check if user is signed in
+    if (user == null) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text("Error"),
+          content: const Text("You need to be signed in to view your QR code."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final String uid =
+        user!.uid; // Non-null assertion since we checked user != null
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Your QR Code"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 200,
+              height: 200,
+              child: QrImageView(
+                data: uid,
+                version: QrVersions.auto,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: uid));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("UID copied to clipboard")),
+                );
+              },
+              child: const Text("Copy UID"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -153,6 +213,11 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
             ElevatedButton(
               onPressed: _uploadImage,
               child: const Text('Upload Image'),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => _showQRCodeDialog(context),
+              child: const Text('Generate QR Code'),
             ),
           ],
         ),
