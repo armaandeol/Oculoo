@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-// Import your sign in page if needed.
-import 'package:oculoo02/presentation/auth/sign_in.dart';
+import 'package:oculoo02/presentation/auth/sign_in.dart'; // Adjust import as needed
 
 /// =======================================
 /// Guardian Home Page: Lists linked patients.
@@ -49,94 +48,10 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
     }
   }
 
-  /// Builds a clickable patient list item.
-  Widget _buildPatientListItem(String patientId, Size size) {
-    return FutureBuilder<DocumentSnapshot>(
-      future:
-          FirebaseFirestore.instance.collection('patient').doc(patientId).get(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const ListTile(
-            title: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError) {
-          return ListTile(
-            title: Text('Error loading patient',
-                style: TextStyle(color: Colors.red)),
-          );
-        }
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return ListTile(
-            title: Text('No patient found for UID: $patientId'),
-          );
-        }
-        final patientData = snapshot.data!.data() as Map<String, dynamic>? ??
-            <String, dynamic>{};
-        final patientName = patientData['name'] ?? 'Unknown Patient';
-
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          elevation: 3,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ListTile(
-            leading: const Icon(Icons.person, color: Colors.indigo),
-            title: Text(
-              patientName,
-              style: TextStyle(
-                fontSize: size.width * 0.045,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            // On tap, navigate to the patient detail page.
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PatientDetailPage(
-                    patientId: patientId,
-                    patientName: patientName,
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  /// Builds the patients section.
-  Widget _buildPatientsSection(Size size) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Patients",
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.indigo[700],
-          ),
-        ),
-        const SizedBox(height: 10),
-        _patientIds.isEmpty
-            ? const Center(child: Text("No patients found."))
-            : Column(
-                children: _patientIds
-                    .map((id) => _buildPatientListItem(id, size))
-                    .toList(),
-              ),
-      ],
-    );
-  }
-
   /// Signs out the current user and navigates to the Sign In screen.
   Future<void> _logout() async {
     try {
       await FirebaseAuth.instance.signOut();
-      // Redirect to the Sign In page after signing out.
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => SignIn()),
@@ -149,32 +64,164 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: const Text("Guardian Dashboard"),
-        backgroundColor: Colors.indigo,
-        elevation: 4,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadLinkedPatients,
-            tooltip: "Refresh",
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.indigo.shade50,
+              Colors.white,
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: "Logout",
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: _buildPatientsSection(size),
+        ),
+        child: Column(
+          children: [
+            AppBar(
+              title: const Text("Guardian Dashboard"),
+              flexibleSpace: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.indigo.shade700,
+                      Colors.indigo.shade400,
+                    ],
+                  ),
+                ),
+              ),
+              elevation: 0,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _loadLinkedPatients,
+                  tooltip: "Refresh",
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout),
+                  onPressed: _logout,
+                  tooltip: "Logout",
+                ),
+              ],
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 16),
+                    Text(
+                      "Linked Patients",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.indigo.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: _patientIds.isEmpty
+                          ? Center(
+                              child: Text(
+                                "No patients found",
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: _patientIds.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 12),
+                              itemBuilder: (ctx, i) =>
+                                  _buildPatientListItem(_patientIds[i]),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+}
+
+Widget _buildPatientListItem(String patientId) {
+  return FutureBuilder<DocumentSnapshot>(
+    future:
+        FirebaseFirestore.instance.collection('patient').doc(patientId).get(),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+        return ListTile(
+          title: Text('Error loading patient',
+              style: TextStyle(color: Colors.red)),
+        );
+      }
+      final patientData = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+      final patientName = patientData['name'] ?? 'Unknown Patient';
+
+      return Material(
+        borderRadius: BorderRadius.circular(16),
+        elevation: 2,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.indigo.shade50,
+                Colors.white,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 12,
+            ),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.indigo.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.person, color: Colors.indigo),
+            ),
+            title: Text(
+              patientName,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.indigo.shade900,
+              ),
+            ),
+            trailing:
+                const Icon(Icons.chevron_right_rounded, color: Colors.indigo),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PatientDetailPage(
+                    patientId: patientId,
+                    patientName: patientName,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    },
+  );
 }
 
 /// ======================================================
@@ -196,12 +243,10 @@ class PatientDetailPage extends StatefulWidget {
 
 class _PatientDetailPageState extends State<PatientDetailPage>
     with SingleTickerProviderStateMixin {
-  // For a date selector (optional)
   final int initialDays = 14;
   late DateTime _startDate;
   DateTime? _selectedDate;
   final ScrollController _dateScrollController = ScrollController();
-
   late TabController _tabController;
 
   @override
@@ -238,33 +283,33 @@ class _PatientDetailPageState extends State<PatientDetailPage>
     return 'Good Evening';
   }
 
-  Widget _buildHeader(Size size) {
+  Widget _buildHeader() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           getGreeting(),
           style: TextStyle(
-            fontSize: size.width * 0.06,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Colors.indigo,
+            color: Colors.indigo.shade800,
           ),
         ),
         Text(
           widget.patientName,
           style: TextStyle(
-            fontSize: size.width * 0.055,
+            fontSize: 20,
             fontWeight: FontWeight.w600,
-            color: Colors.indigo,
+            color: Colors.indigo.shade700,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDateSelector(Size size) {
+  Widget _buildDateSelector() {
     return SizedBox(
-      height: size.height * 0.12,
+      height: 100,
       child: ListView.builder(
         controller: _dateScrollController,
         scrollDirection: Axis.horizontal,
@@ -279,8 +324,8 @@ class _PatientDetailPageState extends State<PatientDetailPage>
             }),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              width: size.width * 0.22,
-              margin: EdgeInsets.symmetric(horizontal: size.width * 0.015),
+              width: 80,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 gradient: isSelected
                     ? LinearGradient(
@@ -304,16 +349,16 @@ class _PatientDetailPageState extends State<PatientDetailPage>
                   Text(
                     DateFormat.E().format(date),
                     style: TextStyle(
-                      fontSize: size.width * 0.035,
+                      fontSize: 14,
                       color: isSelected ? Colors.white : Colors.black54,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  SizedBox(height: size.height * 0.005),
+                  const SizedBox(height: 4),
                   Text(
                     DateFormat.d().format(date),
                     style: TextStyle(
-                      fontSize: size.width * 0.045,
+                      fontSize: 18,
                       color: isSelected ? Colors.white : Colors.black87,
                       fontWeight: FontWeight.bold,
                     ),
@@ -327,8 +372,7 @@ class _PatientDetailPageState extends State<PatientDetailPage>
     );
   }
 
-  /// Medication Reminders Section.
-  Widget _buildMedicationSection(Size size) {
+  Widget _buildMedicationSection() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('patient')
@@ -341,39 +385,50 @@ class _PatientDetailPageState extends State<PatientDetailPage>
         }
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text("No medication reminders found."),
-          );
+          return const Center(child: Text("No medication reminders found."));
         }
         return ListView.builder(
+          physics: const BouncingScrollPhysics(),
           shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
           itemCount: docs.length,
           itemBuilder: (ctx, i) {
             final med = docs[i].data() as Map<String, dynamic>;
-            return Card(
-              margin: EdgeInsets.symmetric(vertical: size.height * 0.005),
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               child: ListTile(
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: size.width * 0.04,
-                  vertical: size.height * 0.01,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.medication, color: Colors.indigo.shade700),
                 ),
                 title: Text(
                   med['medicine'] ?? 'Unknown Medicine',
                   style: TextStyle(
-                    fontSize: size.width * 0.045,
-                    fontWeight: FontWeight.bold,
-                  ),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.indigo.shade900),
                 ),
                 subtitle: Text(
                   "Dosage: ${med['dosage'] ?? 'N/A'}${med['unit'] ?? ''}\n"
                   "Times: ${(med['times'] as List<dynamic>?)?.join(', ') ?? ''}\n"
                   "Frequency: ${med['frequency'] ?? 'N/A'}",
-                  style: TextStyle(fontSize: size.width * 0.035),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                 ),
               ),
             );
@@ -383,8 +438,7 @@ class _PatientDetailPageState extends State<PatientDetailPage>
     );
   }
 
-  /// Medicine Logs Section.
-  Widget _buildLogSection(Size size) {
+  Widget _buildLogSection() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('patient')
@@ -397,14 +451,11 @@ class _PatientDetailPageState extends State<PatientDetailPage>
         }
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text("No medicine logs found."),
-          );
+          return const Center(child: Text("No medicine logs found."));
         }
         return ListView.builder(
+          physics: const BouncingScrollPhysics(),
           shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
           itemCount: docs.length,
           itemBuilder: (ctx, i) {
             final log = docs[i].data() as Map<String, dynamic>;
@@ -430,26 +481,40 @@ class _PatientDetailPageState extends State<PatientDetailPage>
                 date = summary[4]['text'] ?? 'Unknown Date';
               }
             }
-            return Card(
-              margin: EdgeInsets.symmetric(vertical: size.height * 0.005),
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               child: ListTile(
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: size.width * 0.04,
-                  vertical: size.height * 0.01,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.history, color: Colors.indigo.shade700),
                 ),
                 title: Text(
                   medicine,
                   style: TextStyle(
-                    fontSize: size.width * 0.045,
-                    fontWeight: FontWeight.bold,
-                  ),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.indigo.shade900),
                 ),
                 subtitle: Text(
                   "$dosage$unit\n$time • $date",
-                  style: TextStyle(fontSize: size.width * 0.035),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                 ),
               ),
             );
@@ -457,34 +522,6 @@ class _PatientDetailPageState extends State<PatientDetailPage>
         );
       },
     );
-  }
-
-  Widget _buildSectionTitle(String title, Size size) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: size.height * 0.015),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: size.width * 0.055,
-          fontWeight: FontWeight.bold,
-          color: Colors.indigo,
-        ),
-      ),
-    );
-  }
-
-  /// Signs out the current user and navigates to the Sign In screen.
-  Future<void> _exit() async {
-    try {
-      await FirebaseAuth.instance.signOut();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => SignIn()),
-      );
-      print("User signed out successfully.");
-    } catch (e) {
-      print("Error signing out: $e");
-    }
   }
 
   @override
@@ -496,72 +533,128 @@ class _PatientDetailPageState extends State<PatientDetailPage>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final size = MediaQuery.of(context).size; // added size variable
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.patientName),
-        backgroundColor: Colors.indigo,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.exit_to_app),
-            onPressed: _exit,
-            tooltip: "Exit",
-          )
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async => setState(() {}),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: size.width * 0.04,
-              vertical: size.height * 0.02,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(size),
-                SizedBox(height: size.height * 0.02),
-                _buildDateSelector(size),
-                SizedBox(height: size.height * 0.03),
-                TabBar(
-                  controller: _tabController,
-                  labelColor: Colors.indigo,
-                  unselectedLabelColor: Colors.grey,
-                  indicatorColor: Colors.indigo,
-                  tabs: const [
-                    Tab(text: "Medications"),
-                    Tab(text: "Logs"),
-                  ],
-                ),
-                SizedBox(
-                  height: size.height * 0.6,
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      // Medications tab
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionTitle('Medications Reminders', size),
-                          _buildMedicationSection(size),
-                        ],
-                      ),
-                      // Logs tab
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionTitle('Medicine Logs', size),
-                          _buildLogSection(size),
-                        ],
-                      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.indigo.shade50,
+              Colors.white,
+            ],
+          ),
+        ),
+        child: Column(
+          children: [
+            AppBar(
+              title: Text(widget.patientName),
+              flexibleSpace: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.indigo.shade700,
+                      Colors.indigo.shade400,
                     ],
                   ),
                 ),
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.exit_to_app),
+                  onPressed: () async {
+                    await FirebaseAuth.instance.signOut();
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => SignIn()),
+                    );
+                  },
+                  tooltip: "Exit",
+                ),
               ],
             ),
-          ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => setState(() {}),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 16),
+                        _buildHeader(),
+                        const SizedBox(height: 20),
+                        _buildDateSelector(),
+                        const SizedBox(height: 24),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              TabBar(
+                                controller: _tabController,
+                                labelColor: Colors.indigo,
+                                unselectedLabelColor: Colors.grey,
+                                indicator: UnderlineTabIndicator(
+                                  borderSide: BorderSide(
+                                      width: 3, color: Colors.indigo.shade400),
+                                  insets: const EdgeInsets.symmetric(
+                                      horizontal: 32.0),
+                                ),
+                                tabs: [
+                                  Tab(text: 'Medications'),
+                                  Tab(text: 'Logs'),
+                                ],
+                              ),
+                              SizedBox(
+                                height: size.height * 0.6,
+                                child: TabBarView(
+                                  controller: _tabController,
+                                  children: [
+                                    // Medications tab
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Removed _buildSectionTitle call
+                                        _buildMedicationSection(), // no parameter passed
+                                      ],
+                                    ),
+                                    // Logs tab
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Removed _buildSectionTitle call
+                                        _buildLogSection(), // no parameter passed
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // ...existing widgets...
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
