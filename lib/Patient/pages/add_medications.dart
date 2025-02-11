@@ -39,7 +39,8 @@ class _PillReminderPageState extends State<PillReminderPage> {
     final today = DateTime.now();
     if (option == DateRangeOption.forever) {
       _startDateController.text = _formatDate(today);
-      _endDateController.text = _formatDate(DateTime(today.year + 100, today.month, today.day));
+      _endDateController.text =
+          _formatDate(DateTime(today.year + 100, today.month, today.day));
     } else if (option == DateRangeOption.thisMonth) {
       final firstDay = DateTime(today.year, today.month, 1);
       final lastDay = DateTime(today.year, today.month + 1, 0);
@@ -50,7 +51,8 @@ class _PillReminderPageState extends State<PillReminderPage> {
         context: context,
         firstDate: DateTime(2000),
         lastDate: DateTime(2100),
-        initialDateRange: DateTimeRange(start: today, end: today.add(const Duration(days: 7))),
+        initialDateRange: DateTimeRange(
+            start: today, end: today.add(const Duration(days: 7))),
       );
       if (range != null) {
         setState(() {
@@ -82,7 +84,15 @@ class _PillReminderPageState extends State<PillReminderPage> {
   }
 
   Widget _buildWeeklySelector() {
-    final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final days = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday'
+    ];
     return Wrap(
       spacing: 8.0,
       children: days.map((day) {
@@ -148,7 +158,8 @@ class _PillReminderPageState extends State<PillReminderPage> {
         context: context,
         builder: (_) => AlertDialog(
           title: const Text("Incomplete Information"),
-          content: const Text("Please fill out all fields before setting a reminder."),
+          content: const Text(
+              "Please fill out all fields before setting a reminder."),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -202,7 +213,8 @@ class _PillReminderPageState extends State<PillReminderPage> {
             context: context,
             builder: (_) => AlertDialog(
               title: const Text("Error"),
-              content: const Text("User is not authenticated. Please log in and try again."),
+              content: const Text(
+                  "User is not authenticated. Please log in and try again."),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
@@ -235,7 +247,7 @@ class _PillReminderPageState extends State<PillReminderPage> {
           "created_at": FieldValue.serverTimestamp(),
         };
 
-        await medicationsRef.doc(nextId.toString()).set(reminderData);
+        await medicationsRef.add(reminderData);
 
         showDialog(
           context: context,
@@ -372,7 +384,8 @@ class _PillReminderPageState extends State<PillReminderPage> {
                       Column(
                         children: List.generate(_dosageCount, (index) {
                           return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0), // Vertical spacing
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 8.0), // Vertical spacing
                             child: Row(
                               children: [
                                 Expanded(
@@ -384,9 +397,11 @@ class _PillReminderPageState extends State<PillReminderPage> {
                                         decoration: InputDecoration(
                                           labelText: "Time ${index + 1}",
                                           border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(10),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
-                                          contentPadding: const EdgeInsets.symmetric(
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
                                             vertical: 12,
                                             horizontal: 16,
                                           ),
