@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:oculoo02/presentation/auth/sign_in.dart'; // Adjust import as needed
+import 'package:oculoo02/presentation/auth/sign_in.dart';
 
-/// =======================================
-/// Guardian Home Page: Lists linked patients.
-/// =======================================
 class GuardianHomePage extends StatefulWidget {
   const GuardianHomePage({Key? key}) : super(key: key);
 
@@ -23,13 +20,10 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
     _loadLinkedPatients();
   }
 
-  /// Loads linked patient UIDs from the guardian’s listing subcollection.
   Future<void> _loadLinkedPatients() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("No user is logged in.");
-      return;
-    }
+    if (user == null) return;
+
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('guardian')
@@ -44,11 +38,10 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
           .toList();
       setState(() => _patientIds = ids);
     } catch (e) {
-      print("Error loading linked patients: $e");
+      print("Error loading patients: $e");
     }
   }
 
-  /// Signs out the current user and navigates to the Sign In screen.
   Future<void> _logout() async {
     try {
       await FirebaseAuth.instance.signOut();
@@ -56,9 +49,8 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
         context,
         MaterialPageRoute(builder: (context) => SignIn()),
       );
-      print("User signed out successfully.");
     } catch (e) {
-      print("Error signing out: $e");
+      print("Logout error: $e");
     }
   }
 
@@ -66,78 +58,43 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.indigo.shade50,
-              Colors.white,
-            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFE1F5FE), Color(0xFFF3E5F5)],
           ),
         ),
         child: Column(
           children: [
-            AppBar(
-              title: const Text("Guardian Dashboard"),
-              flexibleSpace: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.indigo.shade700,
-                      Colors.indigo.shade400,
-                    ],
-                  ),
-                ),
-              ),
-              elevation: 0,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _loadLinkedPatients,
-                  tooltip: "Refresh",
-                ),
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  onPressed: _logout,
-                  tooltip: "Logout",
-                ),
-              ],
-            ),
+            _buildAppBar(),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 16),
-                    Text(
-                      "Linked Patients",
+                    const Text(
+                      'Linked Patients',
                       style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.indigo.shade800,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF311B92),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Expanded(
                       child: _patientIds.isEmpty
                           ? Center(
                               child: Text(
-                                "No patients found",
+                                'No patients linked yet',
                                 style: TextStyle(
-                                  color: Colors.grey.shade600,
+                                  color: Colors.grey[600],
+                                  fontSize: 18,
                                 ),
                               ),
                             )
-                          : ListView.separated(
-                              physics: const BouncingScrollPhysics(),
-                              itemCount: _patientIds.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 12),
-                              itemBuilder: (ctx, i) =>
-                                  _buildPatientListItem(_patientIds[i]),
-                            ),
+                          : _buildPatientList(),
                     ),
                   ],
                 ),
@@ -148,89 +105,122 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
       ),
     );
   }
-}
 
-Widget _buildPatientListItem(String patientId) {
-  return FutureBuilder<DocumentSnapshot>(
-    future:
-        FirebaseFirestore.instance.collection('patient').doc(patientId).get(),
-    builder: (context, snapshot) {
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
-        return ListTile(
-          title: Text('Error loading patient',
-              style: TextStyle(color: Colors.red)),
-        );
-      }
-      final patientData = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-      final patientName = patientData['name'] ?? 'Unknown Patient';
-
-      return Material(
-        borderRadius: BorderRadius.circular(16),
-        elevation: 2,
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.indigo.shade50,
-                Colors.white,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 12,
-            ),
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.indigo.shade100,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.person, color: Colors.indigo),
-            ),
-            title: Text(
-              patientName,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.indigo.shade900,
-              ),
-            ),
-            trailing:
-                const Icon(Icons.chevron_right_rounded, color: Colors.indigo),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PatientDetailPage(
-                    patientId: patientId,
-                    patientName: patientName,
-                  ),
-                ),
-              );
-            },
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      title: const Text('Guardian Dashboard'),
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF5E35B1), Color(0xFF9575CD)],
+            stops: [0.2, 0.8],
           ),
         ),
-      );
-    },
-  );
+      ),
+      elevation: 0,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh, color: Colors.white),
+          onPressed: _loadLinkedPatients,
+        ),
+        IconButton(
+          icon: const Icon(Icons.logout, color: Colors.white),
+          onPressed: _logout,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPatientList() {
+    return ListView.separated(
+      physics: const ClampingScrollPhysics(),
+      itemCount: _patientIds.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (ctx, i) => _PatientCard(patientId: _patientIds[i]),
+    );
+  }
 }
 
-/// ======================================================
-/// Patient Detail Page: Shows a particular patient’s
-/// medication reminders and logs (with a date selector).
-/// ======================================================
+class _PatientCard extends StatelessWidget {
+  final String patientId;
+
+  const _PatientCard({required this.patientId});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<DocumentSnapshot>(
+      future:
+          FirebaseFirestore.instance.collection('patient').doc(patientId).get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const SizedBox.shrink();
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>;
+        final name = data['name'] ?? 'Unknown Patient';
+
+        return Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PatientDetailPage(
+                  patientId: patientId,
+                  patientName: name,
+                ),
+              ),
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Colors.white, Color(0xFFEDE7F6)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD1C4E9),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: const Icon(Icons.person_outline,
+                        color: Color(0xFF4527A0), size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF311B92),
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: Color(0xFF673AB7)),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class PatientDetailPage extends StatefulWidget {
   final String patientId;
   final String patientName;
+
   const PatientDetailPage({
     Key? key,
     required this.patientId,
@@ -243,104 +233,57 @@ class PatientDetailPage extends StatefulWidget {
 
 class _PatientDetailPageState extends State<PatientDetailPage>
     with SingleTickerProviderStateMixin {
-  final int initialDays = 14;
-  late DateTime _startDate;
-  DateTime? _selectedDate;
-  final ScrollController _dateScrollController = ScrollController();
+  late DateTime _selectedDate = DateTime.now();
   late TabController _tabController;
+  final ScrollController _dateController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _startDate = DateTime.now();
-    _selectedDate = _startDate;
     _tabController = TabController(length: 2, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
   }
 
-  void _scrollToSelected() {
-    final index = _selectedDate!.difference(_startDate).inDays;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final itemWidth = screenWidth * 0.22;
-    final offset = (itemWidth * index) - (screenWidth / 2 - itemWidth / 2);
-    _dateScrollController.animateTo(
-      offset,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeInOut,
-    );
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _dateController.dispose();
+    super.dispose();
   }
 
-  bool isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
+  Widget _buildDatePicker() {
+    final dates =
+        List.generate(14, (i) => DateTime.now().add(Duration(days: i)));
 
-  List<DateTime> _generateDates() =>
-      List.generate(initialDays, (i) => _startDate.add(Duration(days: i)));
-
-  String getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }
-
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          getGreeting(),
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.indigo.shade800,
-          ),
-        ),
-        Text(
-          widget.patientName,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Colors.indigo.shade700,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDateSelector() {
     return SizedBox(
       height: 100,
       child: ListView.builder(
-        controller: _dateScrollController,
+        controller: _dateController,
         scrollDirection: Axis.horizontal,
-        itemCount: initialDays,
+        itemCount: dates.length,
         itemBuilder: (ctx, i) {
-          final date = _startDate.add(Duration(days: i));
-          final isSelected = isSameDay(date, _selectedDate!);
+          final date = dates[i];
+          final isSelected = _selectedDate.day == date.day;
+
           return GestureDetector(
-            onTap: () => setState(() {
-              _selectedDate = date;
-              _scrollToSelected();
-            }),
+            onTap: () => setState(() => _selectedDate = date),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              width: 80,
               margin: const EdgeInsets.symmetric(horizontal: 8),
+              width: 80,
               decoration: BoxDecoration(
                 gradient: isSelected
-                    ? LinearGradient(
-                        colors: [Colors.indigo, Colors.blue.shade400])
+                    ? const LinearGradient(
+                        colors: [Color(0xFF7E57C2), Color(0xFFB39DDB)])
                     : LinearGradient(
-                        colors: [Colors.grey.shade200, Colors.grey.shade100]),
+                        colors: [Colors.grey.shade100, Colors.grey.shade50]),
                 borderRadius: BorderRadius.circular(15),
                 boxShadow: [
-                  BoxShadow(
-                    color: isSelected
-                        ? Colors.indigo.withOpacity(0.3)
-                        : Colors.grey.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
+                  if (isSelected)
+                    BoxShadow(
+                      color: Colors.purple.shade200,
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
                 ],
               ),
               child: Column(
@@ -349,8 +292,7 @@ class _PatientDetailPageState extends State<PatientDetailPage>
                   Text(
                     DateFormat.E().format(date),
                     style: TextStyle(
-                      fontSize: 14,
-                      color: isSelected ? Colors.white : Colors.black54,
+                      color: isSelected ? Colors.white : Colors.grey.shade700,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -358,7 +300,7 @@ class _PatientDetailPageState extends State<PatientDetailPage>
                   Text(
                     DateFormat.d().format(date),
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 22,
                       color: isSelected ? Colors.white : Colors.black87,
                       fontWeight: FontWeight.bold,
                     ),
@@ -372,7 +314,7 @@ class _PatientDetailPageState extends State<PatientDetailPage>
     );
   }
 
-  Widget _buildMedicationSection() {
+  Widget _buildMedicationList() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('patient')
@@ -380,55 +322,62 @@ class _PatientDetailPageState extends State<PatientDetailPage>
           .collection('Medications')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (!snapshot.hasData)
           return const Center(child: CircularProgressIndicator());
-        }
-        final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) {
-          return const Center(child: Text("No medication reminders found."));
-        }
-        return ListView.builder(
-          physics: const BouncingScrollPhysics(),
+
+        return ListView.separated(
+          physics: const ClampingScrollPhysics(),
+          padding: const EdgeInsets.only(top: 16),
           shrinkWrap: true,
-          itemCount: docs.length,
+          itemCount: snapshot.data!.docs.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (ctx, i) {
-            final med = docs[i].data() as Map<String, dynamic>;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.indigo.shade50,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.medication, color: Colors.indigo.shade700),
+            final med = snapshot.data!.docs[i].data() as Map<String, dynamic>;
+
+            return Card(
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                      colors: [Colors.white, Color(0xFFF3E5F5)]),
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                title: Text(
-                  med['medicine'] ?? 'Unknown Medicine',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.indigo.shade900),
-                ),
-                subtitle: Text(
-                  "Dosage: ${med['dosage'] ?? 'N/A'}${med['unit'] ?? ''}\n"
-                  "Times: ${(med['times'] as List<dynamic>?)?.join(', ') ?? ''}\n"
-                  "Frequency: ${med['frequency'] ?? 'N/A'}",
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.medication,
+                            color: Colors.deepPurple.shade700),
+                        const SizedBox(width: 12),
+                        Text(
+                          med['medicine'] ?? 'Unknown',
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF311B92)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 36),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Dosage: ${med['dosage']} ${med['unit']}',
+                              style: TextStyle(color: Colors.grey.shade700)),
+                          Text('Times: ${(med['times'] as List).join(', ')}',
+                              style: TextStyle(color: Colors.grey.shade700)),
+                          Text('Frequency: ${med['frequency']}',
+                              style: TextStyle(color: Colors.grey.shade700)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -438,7 +387,7 @@ class _PatientDetailPageState extends State<PatientDetailPage>
     );
   }
 
-  Widget _buildLogSection() {
+  Widget _buildLogList() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('patient')
@@ -446,75 +395,63 @@ class _PatientDetailPageState extends State<PatientDetailPage>
           .collection('Logs')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (!snapshot.hasData)
           return const Center(child: CircularProgressIndicator());
-        }
-        final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) {
-          return const Center(child: Text("No medicine logs found."));
-        }
-        return ListView.builder(
-          physics: const BouncingScrollPhysics(),
-          shrinkWrap: true,
-          itemCount: docs.length,
-          itemBuilder: (ctx, i) {
-            final log = docs[i].data() as Map<String, dynamic>;
-            final summary = log['summary'] as List<dynamic>? ?? [];
-            String medicine = 'Unknown Medicine';
-            String dosage = 'Unknown Dosage';
-            String unit = '';
-            String time = 'Unknown Time';
-            String date = 'Unknown Date';
 
-            if (summary.isNotEmpty) {
-              medicine = summary[0]['text'] ?? 'Unknown Medicine';
-              if (summary.length > 1) {
-                dosage = summary[1]['text'] ?? 'Unknown Dosage';
-              }
-              if (summary.length > 2) {
-                unit = summary[2]['text'] ?? '';
-              }
-              if (summary.length > 3) {
-                time = summary[3]['text'] ?? 'Unknown Time';
-              }
-              if (summary.length > 4) {
-                date = summary[4]['text'] ?? 'Unknown Date';
-              }
-            }
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.indigo.shade50,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.history, color: Colors.indigo.shade700),
+        return ListView.separated(
+          physics: const ClampingScrollPhysics(),
+          padding: const EdgeInsets.only(top: 16),
+          shrinkWrap: true,
+          itemCount: snapshot.data!.docs.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (ctx, i) {
+            final log = snapshot.data!.docs[i].data() as Map<String, dynamic>;
+            final summary = log['summary'] as List<dynamic>? ?? [];
+
+            return Card(
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                      colors: [Colors.white, Color(0xFFE8F5E9)]),
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                title: Text(
-                  medicine,
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.indigo.shade900),
-                ),
-                subtitle: Text(
-                  "$dosage$unit\n$time • $date",
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.history, color: Colors.green.shade700),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            summary.isNotEmpty ? summary[0]['text'] : 'Unknown',
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1B5E20)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (summary.length > 1)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 36, top: 8),
+                        child: Text(
+                            '${summary[1]['text']} ${summary[2]['text']}',
+                            style: TextStyle(color: Colors.grey.shade700)),
+                      ),
+                    if (summary.length > 3)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 36, top: 4),
+                        child: Text(
+                            '${summary[3]['text']} • ${summary[4]['text']}',
+                            style: TextStyle(color: Colors.grey.shade600)),
+                      ),
+                  ],
                 ),
               ),
             );
@@ -525,133 +462,104 @@ class _PatientDetailPageState extends State<PatientDetailPage>
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    _dateScrollController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size; // added size variable
     return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.patientName),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF5E35B1), Color(0xFF9575CD)],
+            ),
+          ),
+        ),
+      ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.indigo.shade50,
-              Colors.white,
-            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFE1F5FE), Color(0xFFF3E5F5)],
           ),
         ),
         child: Column(
           children: [
-            AppBar(
-              title: Text(widget.patientName),
-              flexibleSpace: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.indigo.shade700,
-                      Colors.indigo.shade400,
-                    ],
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hello, Guardian',
+                    style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade800),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Viewing records for:',
+                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                  ),
+                  Text(
+                    widget.patientName,
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF311B92)),
+                  ),
+                ],
               ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.exit_to_app),
-                  onPressed: () async {
-                    await FirebaseAuth.instance.signOut();
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => SignIn()),
-                    );
-                  },
-                  tooltip: "Exit",
-                ),
-              ],
             ),
+            _buildDatePicker(),
+            const SizedBox(height: 16),
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async => setState(() {}),
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 16),
-                        _buildHeader(),
-                        const SizedBox(height: 20),
-                        _buildDateSelector(),
-                        const SizedBox(height: 24),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                              TabBar(
-                                controller: _tabController,
-                                labelColor: Colors.indigo,
-                                unselectedLabelColor: Colors.grey,
-                                indicator: UnderlineTabIndicator(
-                                  borderSide: BorderSide(
-                                      width: 3, color: Colors.indigo.shade400),
-                                  insets: const EdgeInsets.symmetric(
-                                      horizontal: 32.0),
-                                ),
-                                tabs: [
-                                  Tab(text: 'Medications'),
-                                  Tab(text: 'Logs'),
-                                ],
-                              ),
-                              SizedBox(
-                                height: size.height * 0.6,
-                                child: TabBarView(
-                                  controller: _tabController,
-                                  children: [
-                                    // Medications tab
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        // Removed _buildSectionTitle call
-                                        _buildMedicationSection(), // no parameter passed
-                                      ],
-                                    ),
-                                    // Logs tab
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        // Removed _buildSectionTitle call
-                                        _buildLogSection(), // no parameter passed
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // ...existing widgets...
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.grey.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4)),
+                      ],
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicator: BoxDecoration(
+                        borderRadius: BorderRadius.circular(15),
+                        gradient: const LinearGradient(
+                            colors: [Color(0xFF7E57C2), Color(0xFFB39DDB)]),
+                      ),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.grey.shade700,
+                      tabs: const [
+                        Tab(text: 'Medications'),
+                        Tab(text: 'Logs'),
                       ],
                     ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: _buildMedicationList(),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: _buildLogList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
