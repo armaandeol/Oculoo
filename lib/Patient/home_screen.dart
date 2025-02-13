@@ -21,6 +21,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // For testing, you can set this to a date that matches your dummy data.
     _startDate = DateTime.now();
     _selectedDate = _startDate;
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
@@ -45,10 +46,10 @@ class _HomePageState extends State<HomePage> {
     return 'Good Evening';
   }
 
-  bool isSameDay(DateTime a, DateTime b) => 
+  bool isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  List<DateTime> _generateDates() => 
+  List<DateTime> _generateDates() =>
       List.generate(initialDays, (i) => _startDate.add(Duration(days: i)));
 
   @override
@@ -196,49 +197,142 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Medications Section that now filters based on the selected date.
   Widget _buildMedicationSection(String uid, Size size) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionTitle('Medications Reminders', size),
-        // Medications Reminders Section (restored original functionality)
-StreamBuilder<QuerySnapshot>(
-  stream: FirebaseFirestore.instance
-      .collection('patient')
-      .doc(uid)
-      .collection('Medications')
-      .snapshots(),
-  builder: (context, snapshot) {
-    if (snapshot.connectionState == ConnectionState.waiting) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    final docs = snapshot.data?.docs ?? [];
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: docs.length,
-      itemBuilder: (ctx, i) {
-        final med = docs[i].data() as Map<String, dynamic>;
-        return Dismissible(
-          key: Key(docs[i].id),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            color: Colors.red,
-            alignment: Alignment.centerRight,
-            padding: EdgeInsets.only(right: size.width * 0.05),
-            child: const Icon(Icons.delete, color: Colors.white),
-          ),
-          onDismissed: (_) => docs[i].reference.delete(),
-          child: _buildMedicationItem(med, size),
-        );
-      },
-    );
-  },
-),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('patient')
+              .doc(uid)
+              .collection('Medications')
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final docs = snapshot.data?.docs ?? [];
+            final selectedDate = _selectedDate ?? DateTime.now();
 
-// Medicine Logs Section (restored original functionality)
+            // Updated filtering logic:
+            final filteredDocs = docs.where((doc) {
+              final med = doc.data() as Map<String, dynamic>;
+              final frequency = med['frequency'];
+              // For Daily reminders, check date range only.
+              if (frequency == "Daily") {
+                try {
+                  final medStart = DateTime.parse(med['start_date']);
+                  final medEnd = DateTime.parse(med['end_date']);
+                  return !selectedDate.isBefore(medStart) &&
+                      !selectedDate.isAfter(medEnd);
+                } catch (e) {
+                  return false;
+                }
+              } else {
+                // For Weekly and Custom, first check the date range.
+                try {
+                  final medStart = DateTime.parse(med['start_date']);
+                  final medEnd = DateTime.parse(med['end_date']);
+                  if (selectedDate.isBefore(medStart) ||
+                      selectedDate.isAfter(medEnd)) {
+                    return false;
+                  }
+                } catch (e) {
+                  return false;
+                }
+                if (frequency == "Weekly") {
+                  final selectedFullDay =
+                      DateFormat('EEEE').format(selectedDate);
+                  final List days = med['days'];
+                  return days.contains(selectedFullDay);
+                } else if (frequency == "Custom") {
+                  final selectedAbbrDay = DateFormat('E').format(selectedDate);
+                  final List days = med['days'];
+                  return days.contains(selectedAbbrDay);
+                }
+              }
+              return false;
+            }).toList();
 
+            if (filteredDocs.isEmpty) {
+              return Padding(
+                padding: EdgeInsets.symmetric(vertical: size.height * 0.02),
+                child: Text(
+                  "No medications scheduled for this day.",
+                  style: TextStyle(fontSize: size.width * 0.045),
+                ),
+              );
+            }
+
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: filteredDocs.length,
+              itemBuilder: (ctx, i) {
+                final med = filteredDocs[i].data() as Map<String, dynamic>;
+                return Dismissible(
+                  key: Key(filteredDocs[i].id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: EdgeInsets.only(right: size.width * 0.05),
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+                  onDismissed: (_) => filteredDocs[i].reference.delete(),
+                  child: _buildMedicationItem(med, size),
+                );
+              },
+            );
+          },
+        ),
       ],
+    );
+  }
+
+  /// Minimalistic medication card displaying Pill Name, Time(s), and Unit.
+  Widget _buildMedicationItem(Map<String, dynamic> med, Size size) {
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: size.height * 0.005),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: size.width * 0.04,
+          vertical: size.height * 0.01,
+        ),
+        title: Text(
+          med['pillName'] ?? 'Unknown Pill',
+          style: TextStyle(
+            fontSize: size.width * 0.045,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Time: ${(med['times'] as List).join(', ')}",
+              style: TextStyle(fontSize: size.width * 0.035),
+            ),
+            Text(
+              "Unit: ${med['unit']}",
+              style: TextStyle(fontSize: size.width * 0.035),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -298,12 +392,27 @@ StreamBuilder<QuerySnapshot>(
     );
   }
 
-  Widget _buildMedicationItem(Map<String, dynamic> med, Size size) {
+  Widget _buildLogItem(Map<String, dynamic> log, Size size) {
+    final summary = log['summary'] as List<dynamic>? ?? [];
+    String medicine = 'Unknown Medicine';
+    String dosage = 'Unknown Dosage';
+    String unit = '';
+    String time = 'Unknown Time';
+    String date = 'Unknown Date';
+
+    if (summary.isNotEmpty) {
+      medicine = summary[0]['text'] ?? 'Unknown Medicine';
+      if (summary.length > 1) dosage = summary[1]['text'] ?? 'Unknown Dosage';
+      if (summary.length > 2) unit = summary[2]['text'] ?? '';
+      if (summary.length > 3) time = summary[3]['text'] ?? 'Unknown Time';
+      if (summary.length > 4) date = summary[4]['text'] ?? 'Unknown Date';
+    }
+
     return Container(
       margin: EdgeInsets.symmetric(vertical: size.height * 0.005),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blue.shade100, Colors.blue.shade50],
+          colors: [Colors.green.shade100, Colors.green.shade50],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -322,94 +431,20 @@ StreamBuilder<QuerySnapshot>(
           vertical: size.height * 0.01,
         ),
         title: Text(
-          med['medicine'] ?? 'Unknown Medicine',
+          medicine,
           style: TextStyle(
             fontSize: size.width * 0.045,
             fontWeight: FontWeight.bold,
           ),
         ),
         subtitle: Text(
-          "Dosage: ${med['dosage']}${med['unit']}\n"
-          "Times: ${(med['times'] as List).join(', ')}\n"
-          "Frequency: ${med['frequency']}",
+          "$dosage$unit\n"
+          "$time • $date",
           style: TextStyle(fontSize: size.width * 0.035),
         ),
       ),
     );
   }
-
-  Widget _buildLogItem(Map<String, dynamic> log, Size size) {
-  // Extract relevant information from the OCR summary
-  final summary = log['summary'] as List<dynamic>? ?? [];
-  String medicine = 'Unknown Medicine';
-  String dosage = 'Unknown Dosage';
-  String unit = '';
-  String time = 'Unknown Time';
-  String date = 'Unknown Date';
-
-  // Parse the OCR summary to extract medicine, dosage, etc.
-  if (summary.isNotEmpty) {
-    // Example: Assume the first detected text is the medicine name
-    medicine = summary[0]['text'] ?? 'Unknown Medicine';
-
-    // Example: Assume the second detected text is the dosage
-    if (summary.length > 1) {
-      dosage = summary[1]['text'] ?? 'Unknown Dosage';
-    }
-
-    // Example: Assume the third detected text is the unit
-    if (summary.length > 2) {
-      unit = summary[2]['text'] ?? '';
-    }
-
-    // Example: Assume the fourth detected text is the time
-    if (summary.length > 3) {
-      time = summary[3]['text'] ?? 'Unknown Time';
-    }
-
-    // Example: Assume the fifth detected text is the date
-    if (summary.length > 4) {
-      date = summary[4]['text'] ?? 'Unknown Date';
-    }
-  }
-
-  return Container(
-    margin: EdgeInsets.symmetric(vertical: size.height * 0.005),
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [Colors.green.shade100, Colors.green.shade50],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      borderRadius: BorderRadius.circular(15),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.grey.withOpacity(0.2),
-          blurRadius: 8,
-          offset: const Offset(0, 4),
-        ),
-      ],
-    ),
-    child: ListTile(
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: size.width * 0.04,
-        vertical: size.height * 0.01,
-      ),
-      title: Text(
-        medicine,
-        style: TextStyle(
-          fontSize: size.width * 0.045,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      subtitle: Text(
-        "$dosage$unit\n"
-        "$time • $date",
-        style: TextStyle(fontSize: size.width * 0.035),
-      ),
-    ),
-  );
-}
 }
 
 class FadeIn extends StatelessWidget {
@@ -422,7 +457,7 @@ class FadeIn extends StatelessWidget {
     return TweenAnimationBuilder(
       tween: Tween<double>(begin: 0, end: 1),
       duration: const Duration(milliseconds: 500),
-      builder: (_, double value, Widget? child) => 
+      builder: (_, double value, Widget? child) =>
           Opacity(opacity: value, child: child),
       child: child,
     );

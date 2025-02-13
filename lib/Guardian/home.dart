@@ -178,8 +178,7 @@ class _PatientCard extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Colors.white, Color(0xFFEDE7F6)],
-                ),
+                    colors: [Colors.white, Color(0xFFEDE7F6)]),
                 borderRadius: BorderRadius.circular(20),
               ),
               padding: const EdgeInsets.all(16),
@@ -326,59 +325,47 @@ class _PatientDetailPageState extends State<PatientDetailPage>
           return const Center(child: CircularProgressIndicator());
 
         return ListView.separated(
-          physics: const ClampingScrollPhysics(),
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.only(top: 16),
-          shrinkWrap: true,
           itemCount: snapshot.data!.docs.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (ctx, i) {
             final med = snapshot.data!.docs[i].data() as Map<String, dynamic>;
 
-            return Card(
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15)),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      colors: [Colors.white, Color(0xFFF3E5F5)]),
-                  borderRadius: BorderRadius.circular(15),
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ListTile(
+                leading:
+                    Icon(Icons.medication, color: Colors.deepPurple.shade700),
+                title: Text(
+                  med['medicine'] ?? 'Unknown',
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF311B92)),
                 ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
+                subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.medication,
-                            color: Colors.deepPurple.shade700),
-                        const SizedBox(width: 12),
-                        Text(
-                          med['medicine'] ?? 'Unknown',
-                          style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF311B92)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 36),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Dosage: ${med['dosage']} ${med['unit']}',
-                              style: TextStyle(color: Colors.grey.shade700)),
-                          Text('Times: ${(med['times'] as List).join(', ')}',
-                              style: TextStyle(color: Colors.grey.shade700)),
-                          Text('Frequency: ${med['frequency']}',
-                              style: TextStyle(color: Colors.grey.shade700)),
-                        ],
-                      ),
-                    ),
+                    const SizedBox(height: 4),
+                    Text('Dosage: ${med['dosage']} ${med['unit']}',
+                        style: TextStyle(color: Colors.grey.shade600)),
+                    Text('Times: ${(med['times'] as List).join(', ')}',
+                        style: TextStyle(color: Colors.grey.shade600)),
                   ],
                 ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
             );
           },
@@ -399,60 +386,40 @@ class _PatientDetailPageState extends State<PatientDetailPage>
           return const Center(child: CircularProgressIndicator());
 
         return ListView.separated(
-          physics: const ClampingScrollPhysics(),
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.only(top: 16),
-          shrinkWrap: true,
           itemCount: snapshot.data!.docs.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (ctx, i) {
             final log = snapshot.data!.docs[i].data() as Map<String, dynamic>;
             final summary = log['summary'] as List<dynamic>? ?? [];
 
-            return Card(
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15)),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      colors: [Colors.white, Color(0xFFE8F5E9)]),
-                  borderRadius: BorderRadius.circular(15),
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2)),
+                ],
+              ),
+              child: ListTile(
+                leading: Icon(Icons.history, color: Colors.green.shade700),
+                title: Text(
+                  summary.isNotEmpty ? summary[0]['text'] : 'Unknown',
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1B5E20)),
                 ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.history, color: Colors.green.shade700),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            summary.isNotEmpty ? summary[0]['text'] : 'Unknown',
-                            style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1B5E20)),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (summary.length > 1)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 36, top: 8),
-                        child: Text(
-                            '${summary[1]['text']} ${summary[2]['text']}',
-                            style: TextStyle(color: Colors.grey.shade700)),
-                      ),
-                    if (summary.length > 3)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 36, top: 4),
-                        child: Text(
-                            '${summary[3]['text']} • ${summary[4]['text']}',
-                            style: TextStyle(color: Colors.grey.shade600)),
-                      ),
-                  ],
-                ),
+                subtitle: summary.length > 1
+                    ? Text('${summary[1]['text']} ${summary[2]['text']}',
+                        style: TextStyle(color: Colors.grey.shade600))
+                    : null,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
             );
           },
@@ -520,23 +487,26 @@ class _PatientDetailPageState extends State<PatientDetailPage>
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(8),
                       boxShadow: [
                         BoxShadow(
-                            color: Colors.grey.withOpacity(0.2),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4)),
+                            color: Colors.grey.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2)),
                       ],
                     ),
                     child: TabBar(
                       controller: _tabController,
-                      indicator: BoxDecoration(
-                        borderRadius: BorderRadius.circular(15),
-                        gradient: const LinearGradient(
-                            colors: [Color(0xFF7E57C2), Color(0xFFB39DDB)]),
+                      indicator: UnderlineTabIndicator(
+                        borderSide:
+                            BorderSide(width: 2, color: Color(0xFF5E35B1)),
+                        insets: EdgeInsets.symmetric(horizontal: 16),
                       ),
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.grey.shade700,
+                      labelColor: Color(0xFF5E35B1),
+                      unselectedLabelColor: Colors.grey.shade600,
+                      labelStyle: TextStyle(fontWeight: FontWeight.w600),
+                      unselectedLabelStyle:
+                          TextStyle(fontWeight: FontWeight.normal),
                       tabs: const [
                         Tab(text: 'Medications'),
                         Tab(text: 'Logs'),
