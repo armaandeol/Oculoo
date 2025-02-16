@@ -21,8 +21,9 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // For testing, you can set this to a date that matches your dummy data.
-    _startDate = DateTime.now();
+    // For testing with sample data, set _startDate to a date in the medication's range.
+    // e.g., if your sample med starts on "2025-02-15", then:
+    _startDate = DateTime(2025, 2, 15);
     _selectedDate = _startDate;
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
   }
@@ -51,6 +52,61 @@ class _HomePageState extends State<HomePage> {
 
   List<DateTime> _generateDates() =>
       List.generate(initialDays, (i) => _startDate.add(Duration(days: i)));
+
+  /// Returns a color based on the medication frequency.
+  Color _getCardColor(String frequency) {
+    switch (frequency) {
+      case "Daily":
+        return Colors.blue.shade50;
+      case "Weekly":
+        return Colors.green.shade50;
+      case "Custom":
+        return Colors.orange.shade50;
+      default:
+        return Colors.grey.shade100;
+    }
+  }
+
+  /// Computes the next scheduled time for a medication on the selected day.
+  DateTime? computeNextScheduledTime(
+      Map<String, dynamic> med, DateTime selectedDate) {
+    List<dynamic> timesList = med['times'] as List<dynamic>? ?? [];
+    List<DateTime> scheduledTimes = [];
+    for (var t in timesList) {
+      try {
+        List<String> parts = (t as String).split(":");
+        int hour = int.parse(parts[0]);
+        int minute = int.parse(parts[1]);
+        DateTime dt = DateTime(selectedDate.year, selectedDate.month,
+            selectedDate.day, hour, minute);
+        scheduledTimes.add(dt);
+      } catch (e) {
+        continue;
+      }
+    }
+    if (scheduledTimes.isEmpty) return null;
+    scheduledTimes.sort((a, b) => a.compareTo(b));
+    // If the selected day is today, pick the first time after now (if any)
+    if (isSameDay(selectedDate, DateTime.now())) {
+      DateTime now = DateTime.now();
+      for (var dt in scheduledTimes) {
+        if (dt.isAfter(now)) return dt;
+      }
+      // If all times are past, return the earliest (for display purposes)
+      return scheduledTimes.first;
+    } else {
+      return scheduledTimes.first;
+    }
+  }
+
+  /// Formats a Duration as "X hrs Y mins".
+  String formatDuration(Duration d) {
+    int hours = d.inHours;
+    int minutes = d.inMinutes.remainder(60);
+    String hr = hours > 0 ? "$hours hrs " : "";
+    String min = minutes > 0 ? "$minutes mins" : "";
+    return (hr + min).trim();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,12 +253,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Medications Section that now filters based on the selected date.
+  /// Medication Section with redesigned cards.
   Widget _buildMedicationSection(String uid, Size size) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('Medications Reminders', size),
+        _buildSectionTitle('Medication Reminders', size),
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('patient')
@@ -214,66 +270,25 @@ class _HomePageState extends State<HomePage> {
               return const Center(child: CircularProgressIndicator());
             }
             final docs = snapshot.data?.docs ?? [];
-            final selectedDate = _selectedDate ?? DateTime.now();
-
-            // Updated filtering logic:
-            final filteredDocs = docs.where((doc) {
-              final med = doc.data() as Map<String, dynamic>;
-              final frequency = med['frequency'];
-              // For Daily reminders, check date range only.
-              if (frequency == "Daily") {
-                try {
-                  final medStart = DateTime.parse(med['start_date']);
-                  final medEnd = DateTime.parse(med['end_date']);
-                  return !selectedDate.isBefore(medStart) &&
-                      !selectedDate.isAfter(medEnd);
-                } catch (e) {
-                  return false;
-                }
-              } else {
-                // For Weekly and Custom, first check the date range.
-                try {
-                  final medStart = DateTime.parse(med['start_date']);
-                  final medEnd = DateTime.parse(med['end_date']);
-                  if (selectedDate.isBefore(medStart) ||
-                      selectedDate.isAfter(medEnd)) {
-                    return false;
-                  }
-                } catch (e) {
-                  return false;
-                }
-                if (frequency == "Weekly") {
-                  final selectedFullDay =
-                      DateFormat('EEEE').format(selectedDate);
-                  final List days = med['days'];
-                  return days.contains(selectedFullDay);
-                } else if (frequency == "Custom") {
-                  final selectedAbbrDay = DateFormat('E').format(selectedDate);
-                  final List days = med['days'];
-                  return days.contains(selectedAbbrDay);
-                }
-              }
-              return false;
-            }).toList();
-
-            if (filteredDocs.isEmpty) {
+            if (docs.isEmpty) {
               return Padding(
                 padding: EdgeInsets.symmetric(vertical: size.height * 0.02),
-                child: Text(
-                  "No medications scheduled for this day.",
-                  style: TextStyle(fontSize: size.width * 0.045),
-                ),
+                child: Center(child: Text('No medication reminders found.')),
               );
             }
-
+            // For simplicity, we won’t re-sort the medications here.
             return ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredDocs.length,
+              itemCount: docs.length,
               itemBuilder: (ctx, i) {
-                final med = filteredDocs[i].data() as Map<String, dynamic>;
+                final med = docs[i].data() as Map<String, dynamic>;
+                final nextTime =
+                    computeNextScheduledTime(med, _selectedDate!) ??
+                        DateTime(_selectedDate!.year, _selectedDate!.month,
+                            _selectedDate!.day, 0, 0);
                 return Dismissible(
-                  key: Key(filteredDocs[i].id),
+                  key: Key(docs[i].id),
                   direction: DismissDirection.endToStart,
                   background: Container(
                     color: Colors.red,
@@ -281,8 +296,10 @@ class _HomePageState extends State<HomePage> {
                     padding: EdgeInsets.only(right: size.width * 0.05),
                     child: const Icon(Icons.delete, color: Colors.white),
                   ),
-                  onDismissed: (_) => filteredDocs[i].reference.delete(),
-                  child: _buildMedicationItem(med, size),
+                  onDismissed: (_) async {
+                    await docs[i].reference.delete();
+                  },
+                  child: _buildMedicationItem(med, nextTime, size),
                 );
               },
             );
@@ -292,49 +309,132 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Minimalistic medication card displaying Pill Name, Time(s), and Unit.
-  Widget _buildMedicationItem(Map<String, dynamic> med, Size size) {
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: size.height * 0.005),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: size.width * 0.04,
-          vertical: size.height * 0.01,
+  /// Redesigned, expandable medication card.
+  Widget _buildMedicationItem(
+      Map<String, dynamic> med, DateTime nextTime, Size size) {
+    bool isToday = isSameDay(_selectedDate!, DateTime.now());
+    String timeInfo = "";
+    if (isToday) {
+      DateTime now = DateTime.now();
+      if (nextTime.isAfter(now)) {
+        Duration diff = nextTime.difference(now);
+        timeInfo = "in ${formatDuration(diff)}";
+      } else {
+        timeInfo = "at ${DateFormat.Hm().format(nextTime)}";
+      }
+    } else {
+      timeInfo = "at ${DateFormat.Hm().format(nextTime)}";
+    }
+    Color cardColor = _getCardColor(med['frequency'] as String? ?? "Daily");
+
+    return FadeIn(
+      child: Card(
+        color: cardColor,
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
         ),
-        title: Text(
-          med['pillName'] ?? 'Unknown Pill',
-          style: TextStyle(
-            fontSize: size.width * 0.045,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Time: ${(med['times'] as List).join(', ')}",
-              style: TextStyle(fontSize: size.width * 0.035),
+        margin: EdgeInsets.symmetric(
+            vertical: size.height * 0.005, horizontal: size.width * 0.02),
+        child: ExpansionTile(
+          leading: Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.blue.shade100,
+              borderRadius: BorderRadius.circular(25),
             ),
-            Text(
-              "Unit: ${med['unit']}",
-              style: TextStyle(fontSize: size.width * 0.035),
+            child: Icon(
+              Icons.medication,
+              color: Colors.blue.shade800,
+              size: 30,
+            ),
+          ),
+          title: Text(
+            med['pillName'] ?? 'Unknown Medicine',
+            style: TextStyle(
+              fontSize: size.width * 0.045,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Next: $timeInfo",
+                style: TextStyle(
+                  fontSize: size.width * 0.035,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              Text(
+                "Dosage: ${med['dosage']}${med['unit']}",
+                style: TextStyle(fontSize: size.width * 0.035),
+              ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Mark as Taken button
+              IconButton(
+                icon: Icon(Icons.check_circle, color: Colors.green),
+                onPressed: () {
+                  // TODO: Implement "mark as taken" functionality.
+                },
+              ),
+              // Delete button (optional redundancy, since swipe also deletes)
+              IconButton(
+                icon: Icon(Icons.delete, color: Colors.red),
+                onPressed: () async {
+                  // Delete the medication reminder.
+                  // (You might want to confirm with the user before deletion.)
+                  // For now, we directly delete:
+                  // Find the document and delete:
+                  final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                  // Note: In a real scenario, consider passing the document reference.
+                  await FirebaseFirestore.instance
+                      .collection('patient')
+                      .doc(uid)
+                      .collection('Medications')
+                      .doc(med['createdAt']
+                          .toString()) // or another unique field/document id
+                      .delete();
+                },
+              ),
+            ],
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Frequency: ${med['frequency']}",
+                    style: TextStyle(fontSize: size.width * 0.04),
+                  ),
+                  if (med['frequency'] == "Weekly" ||
+                      med['frequency'] == "Custom")
+                    Text(
+                      "Days: ${(med['days'] as List<dynamic>).join(', ')}",
+                      style: TextStyle(fontSize: size.width * 0.04),
+                    ),
+                  Text(
+                    "Scheduled Times: ${(med['times'] as List<dynamic>).join(', ')}",
+                    style: TextStyle(fontSize: size.width * 0.04),
+                  ),
+                  // Add additional details here if desired.
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
   }
+
+// ... Keep all imports and other code above the same ...
 
   Widget _buildLogSection(String uid, Size size) {
     return Column(
@@ -346,29 +446,42 @@ class _HomePageState extends State<HomePage> {
               .collection('patient')
               .doc(uid)
               .collection('Logs')
+              .orderBy('taken_at', descending: true)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
+
+            if (snapshot.hasError) {
+              return const Center(child: Text('Error loading logs'));
+            }
+
             final docs = snapshot.data?.docs ?? [];
+            if (docs.isEmpty) {
+              return Padding(
+                padding: EdgeInsets.symmetric(vertical: size.height * 0.02),
+                child: const Center(child: Text('No logs available')),
+              );
+            }
+
             return ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: docs.length,
               itemBuilder: (ctx, i) {
                 final log = docs[i].data() as Map<String, dynamic>;
-                return Dismissible(
-                  key: Key(docs[i].id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    color: Colors.red,
-                    alignment: Alignment.centerRight,
-                    padding: EdgeInsets.only(right: size.width * 0.05),
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-                  onDismissed: (_) => docs[i].reference.delete(),
-                  child: _buildLogItem(log, size),
+                final isCorrect = log['is_correct'] ?? false;
+
+                return _buildLogCard(
+                  context: context,
+                  medicine: log['medication'] ?? 'Unknown Medicine',
+                  status: log['status'] ?? 'No status',
+                  time: log['taken_at'] ?? 'No time',
+                  isCorrect: isCorrect,
+                  timeDifference: log['time_difference'] ?? '',
+                  dosage: log['dosage'] ?? '',
+                  size: size,
                 );
               },
             );
@@ -377,6 +490,112 @@ class _HomePageState extends State<HomePage> {
       ],
     );
   }
+
+  Widget _buildLogCard({
+    required BuildContext context,
+    required String medicine,
+    required String status,
+    required String time,
+    required bool isCorrect,
+    required String dosage,
+    required Size size,
+    required String timeDifference,
+  }) {
+    return Card(
+      color: isCorrect ? Colors.green.shade50 : Colors.red.shade50,
+      margin: EdgeInsets.symmetric(
+        vertical: size.height * 0.005,
+        horizontal: size.width * 0.02,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isCorrect ? Colors.green.shade100 : Colors.red.shade100,
+          width: 2,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            Icon(
+              isCorrect ? Icons.check_circle : Icons.error,
+              color: isCorrect ? Colors.green : Colors.red,
+              size: 32,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        medicine,
+                        style: TextStyle(
+                          fontSize: size.width * 0.045,
+                          fontWeight: FontWeight.bold,
+                          color: isCorrect
+                              ? Colors.green.shade800
+                              : Colors.red.shade800,
+                          decoration:
+                              !isCorrect ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      // Added time display
+                      Text(
+                        DateFormat('HH:mm').format(DateTime.parse(time)),
+                        style: TextStyle(
+                          fontSize: size.width * 0.035,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Status: $status',
+                    style: TextStyle(
+                      fontSize: size.width * 0.035,
+                      color: isCorrect
+                          ? Colors.green.shade700
+                          : Colors.red.shade700,
+                    ),
+                  ),
+                  if (timeDifference != null) // Added time difference display
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text(
+                        'Time Difference: $timeDifference',
+                        style: TextStyle(
+                          fontSize: size.width * 0.035,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                  if (dosage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text(
+                        'Dosage: $dosage',
+                        style: TextStyle(
+                          fontSize: size.width * 0.035,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+// ... Keep the rest of the code below the same ...
 
   Widget _buildSectionTitle(String title, Size size) {
     return Padding(
@@ -387,60 +606,6 @@ class _HomePageState extends State<HomePage> {
           fontSize: size.width * 0.055,
           fontWeight: FontWeight.bold,
           color: AppColor.primary,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLogItem(Map<String, dynamic> log, Size size) {
-    final summary = log['summary'] as List<dynamic>? ?? [];
-    String medicine = 'Unknown Medicine';
-    String dosage = 'Unknown Dosage';
-    String unit = '';
-    String time = 'Unknown Time';
-    String date = 'Unknown Date';
-
-    if (summary.isNotEmpty) {
-      medicine = summary[0]['text'] ?? 'Unknown Medicine';
-      if (summary.length > 1) dosage = summary[1]['text'] ?? 'Unknown Dosage';
-      if (summary.length > 2) unit = summary[2]['text'] ?? '';
-      if (summary.length > 3) time = summary[3]['text'] ?? 'Unknown Time';
-      if (summary.length > 4) date = summary[4]['text'] ?? 'Unknown Date';
-    }
-
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: size.height * 0.005),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.green.shade100, Colors.green.shade50],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: size.width * 0.04,
-          vertical: size.height * 0.01,
-        ),
-        title: Text(
-          medicine,
-          style: TextStyle(
-            fontSize: size.width * 0.045,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Text(
-          "$dosage$unit\n"
-          "$time • $date",
-          style: TextStyle(fontSize: size.width * 0.035),
         ),
       ),
     );
