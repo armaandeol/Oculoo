@@ -20,6 +20,7 @@ dependencies:
   intl:
   image_picker:
   qr_flutter: ^4.0.0
+  flutter_local_notifications:
 
 dev_dependencies:
   flutter_test:

@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:oculoo02/presentation/widgets/bottom_nav_bar.dart';
 import 'package:oculoo02/core/configs/theme/app_color.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+// Timezone packages for scheduled notifications.
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -18,14 +23,239 @@ class _HomePageState extends State<HomePage> {
   DateTime? _selectedDate;
   final ScrollController _dateScrollController = ScrollController();
 
+  // Instance of the notifications plugin.
+  late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
+
+  // Flag to avoid showing notifications for logs already present on first load.
+  bool _isInitialLogLoad = true;
+
   @override
   void initState() {
     super.initState();
-    // For testing with sample data, set _startDate to a date in the medication's range.
-    // e.g., if your sample med starts on "2025-02-15", then:
+    // Initialize timezone data
+    tz.initializeTimeZones();
+
+    // For testing with sample data.
     _startDate = DateTime(2025, 2, 15);
     _selectedDate = _startDate;
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
+
+    // Initialize notifications.
+    flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    initializeNotifications();
+
+    // Debug print to verify scheduling.
+    print("Scheduling test notification in 15 seconds...");
+    // Schedule a test notification after 15 seconds.
+    Future.delayed(const Duration(seconds: 15), () {
+      print("Showing test notification now");
+      showSimpleNotification();
+    });
+
+    // Listen for changes in the Logs collection and show a notification for every new log.
+    final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    FirebaseFirestore.instance
+        .collection('patient')
+        .doc(uid)
+        .collection('Logs')
+        .snapshots()
+        .listen((snapshot) {
+      // Skip the initial snapshot containing all existing documents.
+      if (_isInitialLogLoad) {
+        _isInitialLogLoad = false;
+        return;
+      }
+      // Loop through the document changes.
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final log = change.doc.data() as Map<String, dynamic>;
+          showLogNotification(log);
+        }
+      }
+    });
+  }
+
+  // Initialize notifications for both Android and iOS.
+  Future<void> initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+
+    await flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse details) {
+        // Handle notification tap
+        print("Notification tapped: ${details.payload}");
+      },
+    );
+
+    // On iOS, explicitly request permissions.
+    if (Platform.isIOS) {
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+    }
+
+    // Create notification channels for Android (required for Android 8.0+).
+    if (Platform.isAndroid) {
+      // Channel for medication reminders.
+      const AndroidNotificationChannel medicationChannel =
+          AndroidNotificationChannel(
+        'medication_reminders',
+        'Medication Reminders',
+        description: 'Channel for medication reminders',
+        importance: Importance.max,
+        enableVibration: true,
+        playSound: true,
+      );
+
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(medicationChannel);
+
+      // Channel for log notifications.
+      const AndroidNotificationChannel logChannel = AndroidNotificationChannel(
+        'log_notifications',
+        'Log Notifications',
+        description: 'Notifications for medication logs',
+        importance: Importance.max,
+        enableVibration: true,
+        playSound: true,
+      );
+
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(logChannel);
+    }
+  }
+
+  // Function to show a simple test notification.
+  Future<void> showSimpleNotification() async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'your_channel_id', // Must match the channel created above.
+      'your_channel_name',
+      channelDescription: 'Your channel description',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const DarwinNotificationDetails iosNotificationDetails =
+        DarwinNotificationDetails(
+      presentAlert:
+          true, // Forces the notification to display even when the app is in foreground.
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iosNotificationDetails,
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      'Test Notification',
+      'This is a test notification after 15 seconds.',
+      platformChannelSpecifics,
+    );
+  }
+
+  // Function to show a notification when a new log is added.
+  Future<void> showLogNotification(Map<String, dynamic> log) async {
+    final bool isCorrect = log['is_correct'] ?? false;
+    final String medicine = log['medication'] ?? 'Medicine';
+    final String dosage = log['dosage'] ?? '';
+    final String statusText = isCorrect ? 'correctly' : 'incorrectly';
+    final String title = 'Medication Log Added';
+    final String body = 'You took $dosage of $medicine $statusText.';
+
+    // Use a unique notification ID. Here we use the current time in milliseconds.
+    int notificationId =
+        DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
+    await flutterLocalNotificationsPlugin.show(
+      notificationId,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'log_notifications',
+          'Log Notifications',
+          channelDescription: 'Notifications for medication logs',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+    );
+  }
+
+  // Schedules a medication reminder notification using the computed scheduled time.
+  Future<void> scheduleMedicationNotification({
+    required int notificationId,
+    required DateTime scheduledTime,
+    required String medicineName,
+    required String dosage,
+  }) async {
+    final tz.TZDateTime scheduledDate =
+        tz.TZDateTime.from(scheduledTime, tz.local);
+
+    try {
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        notificationId,
+        'Medication Reminder',
+        'Time to take $dosage of $medicineName',
+        scheduledDate,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'medication_reminders',
+            'Medication Reminders',
+            channelDescription: 'Channel for medication reminders',
+            importance: Importance.max,
+            priority: Priority.high,
+            enableVibration: true,
+            playSound: true,
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+
+      print(
+          'Scheduled notification for $medicineName at ${scheduledDate.toString()}');
+    } catch (e) {
+      print('Error scheduling notification: $e');
+    }
   }
 
   void _scrollToSelected() {
@@ -86,13 +316,11 @@ class _HomePageState extends State<HomePage> {
     }
     if (scheduledTimes.isEmpty) return null;
     scheduledTimes.sort((a, b) => a.compareTo(b));
-    // If the selected day is today, pick the first time after now (if any)
     if (isSameDay(selectedDate, DateTime.now())) {
       DateTime now = DateTime.now();
       for (var dt in scheduledTimes) {
         if (dt.isAfter(now)) return dt;
       }
-      // If all times are past, return the earliest (for display purposes)
       return scheduledTimes.first;
     } else {
       return scheduledTimes.first;
@@ -253,7 +481,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Medication Section with redesigned cards.
   Widget _buildMedicationSection(String uid, Size size) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,7 +503,6 @@ class _HomePageState extends State<HomePage> {
                 child: Center(child: Text('No medication reminders found.')),
               );
             }
-            // For simplicity, we won’t re-sort the medications here.
             return ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -309,7 +535,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// Redesigned, expandable medication card.
   Widget _buildMedicationItem(
       Map<String, dynamic> med, DateTime nextTime, Size size) {
     bool isToday = isSameDay(_selectedDate!, DateTime.now());
@@ -376,30 +601,51 @@ class _HomePageState extends State<HomePage> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Mark as Taken button
+              // "Mark as Taken" button.
               IconButton(
                 icon: Icon(Icons.check_circle, color: Colors.green),
-                onPressed: () {
-                  // TODO: Implement "mark as taken" functionality.
+                onPressed: () async {
+                  // Create a unique notification ID (using createdAt or fallback).
+                  int notificationId = med['createdAt'].toString().hashCode;
+                  // Cancel any pending notification.
+                  await flutterLocalNotificationsPlugin.cancel(notificationId);
+
+                  // TODO: Update your medication log in Firestore as needed.
+
+                  // Schedule the next reminder (if any) based on computed time.
+                  DateTime? nextDose =
+                      computeNextScheduledTime(med, _selectedDate!);
+                  if (nextDose != null && nextDose.isAfter(DateTime.now())) {
+                    await scheduleMedicationNotification(
+                      notificationId: notificationId,
+                      scheduledTime: nextDose,
+                      medicineName: med['pillName'] ?? 'Medicine',
+                      dosage: '${med['dosage']}${med['unit']}',
+                    );
+                  }
                 },
               ),
-              // Delete button (optional redundancy, since swipe also deletes)
+              // Delete button.
               IconButton(
                 icon: Icon(Icons.delete, color: Colors.red),
                 onPressed: () async {
-                  // Delete the medication reminder.
-                  // (You might want to confirm with the user before deletion.)
-                  // For now, we directly delete:
-                  // Find the document and delete:
-                  final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-                  // Note: In a real scenario, consider passing the document reference.
-                  await FirebaseFirestore.instance
-                      .collection('patient')
-                      .doc(uid)
-                      .collection('Medications')
-                      .doc(med['createdAt']
-                          .toString()) // or another unique field/document id
-                      .delete();
+                  try {
+                    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                    // Ensure you use the document ID from your snapshot here.
+                    await FirebaseFirestore.instance
+                        .collection('patient')
+                        .doc(uid)
+                        .collection('Medications')
+                        .doc(med[
+                            'docId']) // You might need to pass the document ID.
+                        .delete();
+
+                    // Cancel any pending notifications
+                    await flutterLocalNotificationsPlugin
+                        .cancel(med['createdAt'].toString().hashCode);
+                  } catch (e) {
+                    print('Error deleting medication: $e');
+                  }
                 },
               ),
             ],
@@ -424,7 +670,6 @@ class _HomePageState extends State<HomePage> {
                     "Scheduled Times: ${(med['times'] as List<dynamic>).join(', ')}",
                     style: TextStyle(fontSize: size.width * 0.04),
                   ),
-                  // Add additional details here if desired.
                 ],
               ),
             ),
@@ -433,8 +678,6 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-
-// ... Keep all imports and other code above the same ...
 
   Widget _buildLogSection(String uid, Size size) {
     return Column(
@@ -543,7 +786,6 @@ class _HomePageState extends State<HomePage> {
                               !isCorrect ? TextDecoration.lineThrough : null,
                         ),
                       ),
-                      // Added time display
                       Text(
                         DateFormat('HH:mm').format(DateTime.parse(time)),
                         style: TextStyle(
@@ -564,7 +806,7 @@ class _HomePageState extends State<HomePage> {
                           : Colors.red.shade700,
                     ),
                   ),
-                  if (timeDifference != null) // Added time difference display
+                  if (timeDifference.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4.0),
                       child: Text(
@@ -594,8 +836,6 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-
-// ... Keep the rest of the code below the same ...
 
   Widget _buildSectionTitle(String title, Size size) {
     return Padding(
