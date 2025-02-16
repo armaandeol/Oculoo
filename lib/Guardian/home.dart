@@ -4,6 +4,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:oculoo02/presentation/auth/sign_in.dart';
 
+class AppColors {
+  static const Color primary = Color(0xFF6C5CE7);
+  static const Color secondary = Color(0xFFA8A5E6);
+  static const Color background = Color(0xFFF8F9FA);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color error = Color(0xFFE57373);
+  static const Color textPrimary = Color(0xFF2D3436);
+  static const Color textSecondary = Color(0xFF636E72);
+}
+
 class GuardianHomePage extends StatefulWidget {
   const GuardianHomePage({Key? key}) : super(key: key);
 
@@ -13,6 +23,7 @@ class GuardianHomePage extends StatefulWidget {
 
 class _GuardianHomePageState extends State<GuardianHomePage> {
   List<String> _patientIds = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -21,6 +32,7 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
   }
 
   Future<void> _loadLinkedPatients() async {
+    setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -36,9 +48,13 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
           .where((uid) => uid != null)
           .cast<String>()
           .toList();
-      setState(() => _patientIds = ids);
+      setState(() {
+        _patientIds = ids;
+        _isLoading = false;
+      });
     } catch (e) {
       print("Error loading patients: $e");
+      setState(() => _isLoading = false);
     }
   }
 
@@ -51,93 +67,147 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
       );
     } catch (e) {
       print("Logout error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Logout failed: ${e.toString()}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFE1F5FE), Color(0xFFF3E5F5)],
-          ),
-        ),
-        child: Column(
-          children: [
-            _buildAppBar(),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Linked Patients',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF311B92),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: _patientIds.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No patients linked yet',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 18,
-                                ),
-                              ),
-                            )
-                          : _buildPatientList(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+      backgroundColor: AppColors.background,
+      body: CustomScrollView(
+        slivers: [
+          _buildAppBar(),
+          _isLoading
+              ? SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()))
+              : _buildContent(),
+        ],
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      title: const Text('Guardian Dashboard'),
-      flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF5E35B1), Color(0xFF9575CD)],
-            stops: [0.2, 0.8],
+  SliverAppBar _buildAppBar() {
+    return SliverAppBar(
+      expandedHeight: 200,
+      flexibleSpace: FlexibleSpaceBar(
+        title: Text('Guardian Dashboard',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        background: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppColors.primary, AppColors.secondary],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildUserInfo(),
+                  const SizedBox(height: 20),
+                  Text('${_patientIds.length} Patients Linked',
+                      style: TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
           ),
         ),
       ),
-      elevation: 0,
+      pinned: true,
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.white),
+          icon: Icon(Icons.refresh, color: Colors.white),
           onPressed: _loadLinkedPatients,
         ),
-        IconButton(
-          icon: const Icon(Icons.logout, color: Colors.white),
-          onPressed: _logout,
+        _buildLogoutButton(),
+      ],
+    );
+  }
+
+  Widget _buildUserInfo() {
+    final user = FirebaseAuth.instance.currentUser;
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 24,
+          backgroundImage:
+              user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
+          child: user?.photoURL == null
+              ? Icon(Icons.person, color: Colors.white)
+              : null,
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(user?.displayName ?? 'Guardian',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600)),
+            Text(user?.email ?? '',
+                style: TextStyle(color: Colors.white70, fontSize: 14)),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildPatientList() {
-    return ListView.separated(
-      physics: const ClampingScrollPhysics(),
-      itemCount: _patientIds.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (ctx, i) => _PatientCard(patientId: _patientIds[i]),
+  Widget _buildLogoutButton() {
+    return PopupMenuButton(
+      icon: Icon(Icons.more_vert, color: Colors.white),
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          child: ListTile(
+            leading: Icon(Icons.logout, color: AppColors.textPrimary),
+            title: Text('Logout'),
+            onTap: _logout,
+          ),
+        ),
+      ],
     );
+  }
+
+  Widget _buildContent() {
+    return _patientIds.isEmpty
+        ? SliverFillRemaining(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.group_off,
+                      size: 64, color: AppColors.textSecondary),
+                  const SizedBox(height: 16),
+                  Text('No patients linked yet',
+                      style: TextStyle(
+                          fontSize: 18, color: AppColors.textSecondary)),
+                  TextButton.icon(
+                    icon: Icon(Icons.add),
+                    label: Text('Add Patient'),
+                    onPressed: () {}, // Implement add patient functionality
+                  ),
+                ],
+              ),
+            ),
+          )
+        : SliverPadding(
+            padding: const EdgeInsets.all(16.0),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _PatientCard(patientId: _patientIds[index]),
+                childCount: _patientIds.length,
+              ),
+            ),
+          );
   }
 }
 
@@ -158,14 +228,16 @@ class _PatientCard extends StatelessWidget {
 
         final data = snapshot.data!.data() as Map<String, dynamic>;
         final name = data['name'] ?? 'Unknown Patient';
+        final lastMedication = data['lastMedication'] ?? 'N/A';
 
         return Card(
-          elevation: 4,
+          margin: const EdgeInsets.only(bottom: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(15),
           ),
+          elevation: 2,
           child: InkWell(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(15),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -175,37 +247,37 @@ class _PatientCard extends StatelessWidget {
                 ),
               ),
             ),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                    colors: [Colors.white, Color(0xFFEDE7F6)]),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              padding: const EdgeInsets.all(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFD1C4E9),
-                      borderRadius: BorderRadius.circular(15),
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.person_outline,
-                        color: Color(0xFF4527A0), size: 28),
+                    child: Icon(Icons.person_outline, color: AppColors.primary),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Text(
-                      name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF311B92),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name,
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary)),
+                        const SizedBox(height: 4),
+                        Text('Last medication: $lastMedication',
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.textSecondary)),
+                      ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: Color(0xFF673AB7)),
+                  Icon(Icons.chevron_right, color: AppColors.textSecondary),
                 ],
               ),
             ),
@@ -234,7 +306,6 @@ class _PatientDetailPageState extends State<PatientDetailPage>
     with SingleTickerProviderStateMixin {
   late DateTime _selectedDate = DateTime.now();
   late TabController _tabController;
-  final ScrollController _dateController = ScrollController();
 
   @override
   void initState() {
@@ -245,18 +316,16 @@ class _PatientDetailPageState extends State<PatientDetailPage>
   @override
   void dispose() {
     _tabController.dispose();
-    _dateController.dispose();
     super.dispose();
   }
 
   Widget _buildDatePicker() {
     final dates =
-        List.generate(14, (i) => DateTime.now().add(Duration(days: i)));
+        List.generate(7, (i) => DateTime.now().add(Duration(days: i - 3)));
 
     return SizedBox(
       height: 100,
       child: ListView.builder(
-        controller: _dateController,
         scrollDirection: Axis.horizontal,
         itemCount: dates.length,
         itemBuilder: (ctx, i) {
@@ -268,21 +337,16 @@ class _PatientDetailPageState extends State<PatientDetailPage>
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               margin: const EdgeInsets.symmetric(horizontal: 8),
-              width: 80,
+              width: 60,
               decoration: BoxDecoration(
-                gradient: isSelected
-                    ? const LinearGradient(
-                        colors: [Color(0xFF7E57C2), Color(0xFFB39DDB)])
-                    : LinearGradient(
-                        colors: [Colors.grey.shade100, Colors.grey.shade50]),
-                borderRadius: BorderRadius.circular(15),
+                color: isSelected ? AppColors.primary : Colors.white,
+                borderRadius: BorderRadius.circular(12),
                 boxShadow: [
-                  if (isSelected)
-                    BoxShadow(
-                      color: Colors.purple.shade200,
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
                 ],
               ),
               child: Column(
@@ -291,17 +355,18 @@ class _PatientDetailPageState extends State<PatientDetailPage>
                   Text(
                     DateFormat.E().format(date),
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.grey.shade700,
-                      fontWeight: FontWeight.w600,
+                      color:
+                          isSelected ? Colors.white : AppColors.textSecondary,
+                      fontSize: 12,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     DateFormat.d().format(date),
                     style: TextStyle(
-                      fontSize: 22,
-                      color: isSelected ? Colors.white : Colors.black87,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -321,12 +386,13 @@ class _PatientDetailPageState extends State<PatientDetailPage>
           .collection('Medications')
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
-          return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) {
+          return Center(child: CircularProgressIndicator());
+        }
 
         return ListView.separated(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.only(top: 16),
+          physics: const NeverScrollableScrollPhysics(),
+          shrinkWrap: true,
           itemCount: snapshot.data!.docs.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (ctx, i) {
@@ -335,91 +401,47 @@ class _PatientDetailPageState extends State<PatientDetailPage>
             return Container(
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    blurRadius: 8,
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: ListTile(
-                leading:
-                    Icon(Icons.medication, color: Colors.deepPurple.shade700),
-                title: Text(
-                  med['medicine'] ?? 'Unknown',
-                  style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF311B92)),
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.medication, color: AppColors.primary),
                 ),
+                title: Text(med['medicine'] ?? 'Unknown',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 4),
-                    Text('Dosage: ${med['dosage']} ${med['unit']}',
-                        style: TextStyle(color: Colors.grey.shade600)),
+                    Text('${med['dosage']} ${med['unit']}',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary)),
                     Text('Times: ${(med['times'] as List).join(', ')}',
-                        style: TextStyle(color: Colors.grey.shade600)),
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary)),
                   ],
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildLogList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('patient')
-          .doc(widget.patientId)
-          .collection('Logs')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData)
-          return const Center(child: CircularProgressIndicator());
-
-        return ListView.separated(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.only(top: 16),
-          itemCount: snapshot.data!.docs.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (ctx, i) {
-            final log = snapshot.data!.docs[i].data() as Map<String, dynamic>;
-            final summary = log['summary'] as List<dynamic>? ?? [];
-
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2)),
-                ],
-              ),
-              child: ListTile(
-                leading: Icon(Icons.history, color: Colors.green.shade700),
-                title: Text(
-                  summary.isNotEmpty ? summary[0]['text'] : 'Unknown',
-                  style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1B5E20)),
+                trailing: Chip(
+                  label: Text('Pending',
+                      style: TextStyle(color: Colors.white, fontSize: 12)),
+                  backgroundColor: AppColors.primary,
                 ),
-                subtitle: summary.length > 1
-                    ? Text('${summary[1]['text']} ${summary[2]['text']}',
-                        style: TextStyle(color: Colors.grey.shade600))
-                    : null,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
             );
           },
@@ -433,108 +455,132 @@ class _PatientDetailPageState extends State<PatientDetailPage>
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.patientName),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF5E35B1), Color(0xFF9575CD)],
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.info_outline, color: Colors.white),
+            onPressed: () {}, // Add patient info dialog
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDatePicker(),
+                const SizedBox(height: 24),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TabBar(
+                    controller: _tabController,
+                    indicator: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.primary.withOpacity(0.1),
+                    ),
+                    labelColor: AppColors.primary,
+                    unselectedLabelColor: AppColors.textSecondary,
+                    tabs: const [
+                      Tab(text: 'Medications'),
+                      Tab(text: 'Health Logs'),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFE1F5FE), Color(0xFFF3E5F5)],
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: _buildMedicationList(),
+                ),
+                _buildHealthLogs(),
+              ],
+            ),
           ),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Hello, Guardian',
-                    style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey.shade800),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Viewing records for:',
-                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-                  ),
-                  Text(
-                    widget.patientName,
-                    style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF311B92)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHealthLogs() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('patient')
+          .doc(widget.patientId)
+          .collection('Logs')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: snapshot.data!.docs.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (ctx, i) {
+            final log = snapshot.data!.docs[i].data() as Map<String, dynamic>;
+            final timestamp = (log['timestamp'] as Timestamp).toDate();
+            final summary = log['summary'] as List<dynamic>? ?? [];
+
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
-            ),
-            _buildDatePicker(),
-            const SizedBox(height: 16),
-            Expanded(
-              child: Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.grey.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2)),
-                      ],
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      indicator: UnderlineTabIndicator(
-                        borderSide:
-                            BorderSide(width: 2, color: Color(0xFF5E35B1)),
-                        insets: EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                      labelColor: Color(0xFF5E35B1),
-                      unselectedLabelColor: Colors.grey.shade600,
-                      labelStyle: TextStyle(fontWeight: FontWeight.w600),
-                      unselectedLabelStyle:
-                          TextStyle(fontWeight: FontWeight.normal),
-                      tabs: const [
-                        Tab(text: 'Medications'),
-                        Tab(text: 'Logs'),
-                      ],
-                    ),
+              child: ListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: _buildMedicationList(),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: _buildLogList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  child: Icon(Icons.assignment_turned_in,
+                      color: Colors.green.shade700),
+                ),
+                title: Text(
+                  summary.isNotEmpty ? summary[0]['text'] : 'Unknown Log',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 4),
+                    Text(DateFormat.yMMMd().add_jm().format(timestamp),
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary)),
+                    if (summary.length > 1)
+                      Text('${summary[1]['text']} ${summary[2]['text']}',
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary)),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }
