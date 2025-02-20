@@ -7,7 +7,12 @@ class Textfield extends StatelessWidget {
   final bool obscureText;
   final TextEditingController controller;
 
-  const Textfield({super.key, required this.lbl, required this.controller, this.icon, this.obscureText = false});
+  const Textfield(
+      {super.key,
+      required this.lbl,
+      required this.controller,
+      this.icon,
+      this.obscureText = false});
 
   @override
   Widget build(BuildContext context) {
@@ -33,4 +38,3 @@ class Textfield extends StatelessWidget {
     );
   }
 }
-
