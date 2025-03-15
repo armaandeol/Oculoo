@@ -45,5 +45,19 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+</dict>
+<key>UIBackgroundModes</key>
+<array>
+    <string>fetch</string>
+    <string>remote-notification</string>
+</array>
+<key>NSLocalNotificationsUsageDescription</key>
+<string>We use notifications to remind you about your schedule.</string>
+<key>NSUserNotificationUsageDescription</key>
+<string>We use notifications to remind you about important updates.</string>
 </dict>
 </plist>

@@ -1,15 +1,18 @@
+// sign_up.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:oculoo02/Guardian/home.dart';
+import 'package:oculoo02/Patient/home_screen.dart';
+import 'package:oculoo02/core/configs/theme/app_color.dart';
 import 'package:oculoo02/presentation/auth/sign_in.dart';
 import 'package:oculoo02/presentation/widgets/isPatient.dart';
-import 'package:oculoo02/core/configs/theme/app_color.dart';
 import 'package:oculoo02/presentation/widgets/textfield.dart';
 import 'package:oculoo02/Patient/home_screen.dart';
 import 'package:oculoo02/Guardian/home.dart';
 
 class SignUp extends StatefulWidget {
-  const SignUp({Key? key}) : super(key: key);
+  const SignUp({super.key});
 
   @override
   State<SignUp> createState() => _SignUpState();
@@ -20,6 +23,8 @@ class _SignUpState extends State<SignUp> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController cpasswordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureCPassword = true;
   bool _isGuardian = false;
   bool _isLoading = false;
 
@@ -122,7 +127,6 @@ class _SignUpState extends State<SignUp> {
       return;
     }
 
-    // Check if passwords match
     if (password != cpassword) {
       _showErrorMessage("Passwords do not match");
       setState(() => _isLoading = false);
@@ -146,18 +150,12 @@ class _SignUpState extends State<SignUp> {
     }
 
     try {
-      // Create the user account via Firebase Authentication
-      UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
 
-      String uid = userCredential.user!.uid;
-      // Determine role based on toggle
-      String role = _isGuardian ? 'guardian' : 'patient';
+      final uid = userCredential.user!.uid;
+      final role = _isGuardian ? 'guardian' : 'patient';
 
-      // Save user details in Firestore under the appropriate collection
       await FirebaseFirestore.instance.collection(role).doc(uid).set({
         'name': name,
         'email': email,
@@ -171,14 +169,15 @@ class _SignUpState extends State<SignUp> {
         ),
       );
 
-      // Clear the navigation stack and redirect based on user role
       Navigator.popUntil(context, (route) => route.isFirst);
       if (role == 'patient') {
-        Navigator.of(context).pushReplacement(
+        Navigator.pushReplacement(
+          context,
           MaterialPageRoute(builder: (_) => const HomePage()),
         );
-      } else if (role == 'guardian') {
-        Navigator.of(context).pushReplacement(
+      } else {
+        Navigator.pushReplacement(
+          context,
           MaterialPageRoute(builder: (_) => GuardianHomePage()),
         );
       }
@@ -210,7 +209,6 @@ class _SignUpState extends State<SignUp> {
           padding: const EdgeInsets.all(20.0),
           child: Column(
             children: [
-              // Logo or Image
               ClipOval(
                 child: Image.asset(
                   'assets/images/face_id1.gif',
@@ -220,8 +218,6 @@ class _SignUpState extends State<SignUp> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Title
               const Text(
                 "Create Account",
                 style: TextStyle(
@@ -230,9 +226,7 @@ class _SignUpState extends State<SignUp> {
                   color: Colors.black,
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // Input Fields
+              const SizedBox(height: 25),
               Textfield(lbl: "Full Name", controller: nameController),
               const SizedBox(height: 15),
               Textfield(lbl: "Email", controller: emailController),
@@ -240,26 +234,27 @@ class _SignUpState extends State<SignUp> {
               Textfield(
                 lbl: "Password",
                 controller: passwordController,
-                obscureText: true,
-                icon: Icons.visibility_off,
+                obscureText: _obscurePassword,
+                icon:
+                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                onIconPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
               ),
               const SizedBox(height: 15),
               Textfield(
                 lbl: "Confirm Password",
                 controller: cpasswordController,
-                obscureText: true,
-                icon: Icons.visibility_off,
+                obscureText: _obscureCPassword,
+                icon:
+                    _obscureCPassword ? Icons.visibility_off : Icons.visibility,
+                onIconPressed: () =>
+                    setState(() => _obscureCPassword = !_obscureCPassword),
               ),
               const SizedBox(height: 25),
               IsGuardian(
-                onChanged: (value) {
-                  setState(() {
-                    _isGuardian = value; // Update the toggle state
-                  });
-                },
+                onChanged: (value) => setState(() => _isGuardian = value),
               ),
-
-              // Sign Up Button
+              const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -295,15 +290,12 @@ class _SignUpState extends State<SignUp> {
                         ),
                 ),
               ),
-              const SizedBox(height: 15),
-
-              // Already have an account? Sign In
+              const SizedBox(height: 20),
               TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => SignIn()),
-                  );
-                },
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SignIn()),
+                ),
                 child: const Text(
                   "Already have an account? Sign In",
                   style: TextStyle(color: Colors.blue),

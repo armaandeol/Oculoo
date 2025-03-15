@@ -1,3 +1,4 @@
+// textfield.dart
 import 'package:flutter/material.dart';
 import 'package:oculoo02/core/configs/theme/app_color.dart';
 
@@ -6,6 +7,8 @@ class Textfield extends StatefulWidget {
   final IconData? icon;
   final bool obscureText;
   final TextEditingController controller;
+  final VoidCallback? onIconPressed;
+  final String? Function(String?)? validator;
 
   const Textfield(
       {super.key,
@@ -53,9 +56,10 @@ class _TextfieldState extends State<Textfield> {
           fillColor: AppColor.grey,
           filled: true,
           border: OutlineInputBorder(
-            borderSide: BorderSide(width: 10),
             borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(width: 1),
           ),
+          errorStyle: const TextStyle(fontSize: 12),
         ),
       ),
     );
