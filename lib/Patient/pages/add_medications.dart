@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 
 enum DateRangeOption { forever, thisMonth, custom }
 
@@ -11,23 +12,16 @@ class PillReminderPage extends StatefulWidget {
 
 class _PillReminderPageState extends State<PillReminderPage> {
   final _formKey = GlobalKey<FormState>();
+  final _medicineController = TextEditingController();
+  final _dosageController = TextEditingController();
+  final _startDateController = TextEditingController();
+  final _endDateController = TextEditingController();
 
-  // Controllers for basic info
-  final TextEditingController _medicineController = TextEditingController();
-  final TextEditingController _dosageController = TextEditingController();
-  final TextEditingController _unitController = TextEditingController();
-
-  // Controllers for dates
-  final TextEditingController _startDateController = TextEditingController();
-  final TextEditingController _endDateController = TextEditingController();
-
-  // Time(s) controller list for daily dosages
   int _dosageCount = 1;
   List<TextEditingController> _timeControllers = [TextEditingController()];
-
-  // Frequency & days
-  String _frequency = 'Daily'; // Options: Daily, Weekly, Custom
-  String _selectedWeeklyDay = 'Monday';
+  String _frequency = 'Daily';
+  String _selectedWeeklyDay = 'Mon';
+  String _selectedUnit = 'mg';
   Map<String, bool> _selectedCustomDays = {
     'Mon': false,
     'Tue': false,
@@ -37,422 +31,236 @@ class _PillReminderPageState extends State<PillReminderPage> {
     'Sat': false,
     'Sun': false
   };
-
   DateRangeOption _dateRangeOption = DateRangeOption.forever;
+  final List<String> _units = ['mg', 'tablet', 'mL', 'dose', 'drop'];
+  final List<String> _weekDays = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun'
+  ];
 
   @override
   void initState() {
     super.initState();
+    _initializeDates();
+  }
+
+  void _initializeDates() {
     final today = DateTime.now();
-    // By default, set startDate as today and endDate far in the future
     _startDateController.text = _formatDate(today);
-    _endDateController.text = _formatDate(
-        DateTime(today.year + 100, today.month, today.day)); // "Forever"
+    _endDateController.text = _formatDate(DateTime(today.year + 100));
   }
 
-  /// Formats DateTime as yyyy-MM-dd
-  String _formatDate(DateTime date) {
-    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-  }
+  String _formatDate(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
 
-  /// Opens a time picker and saves the selected time as a 24-hour string.
-  Future<void> _pickTime(int index) async {
-    final initialTime = TimeOfDay.now();
-    final picked =
-        await showTimePicker(context: context, initialTime: initialTime);
-    if (picked != null) {
-      setState(() {
-        final hour = picked.hour.toString().padLeft(2, '0');
-        final minute = picked.minute.toString().padLeft(2, '0');
-        _timeControllers[index].text = "$hour:$minute";
-      });
-    }
-  }
+  // ... [Keep existing time picker and date range handling logic] ...
 
-  /// Opens a date range picker for custom date range selection.
-  Future<void> _pickDateRange() async {
-    final today = DateTime.now();
-    final range = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      initialDateRange:
-          DateTimeRange(start: today, end: today.add(Duration(days: 7))),
-    );
-    if (range != null) {
-      setState(() {
-        _startDateController.text = _formatDate(range.start);
-        _endDateController.text = _formatDate(range.end);
-      });
-    }
-  }
-
-  /// Updates date range values based on the selected option.
-  void _onDateRangeOptionChanged(DateRangeOption? option) async {
-    if (option == null) return;
-    setState(() {
-      _dateRangeOption = option;
-    });
-    final today = DateTime.now();
-    if (option == DateRangeOption.forever) {
-      _startDateController.text = _formatDate(today);
-      _endDateController.text =
-          _formatDate(DateTime(today.year + 100, today.month, today.day));
-    } else if (option == DateRangeOption.thisMonth) {
-      final firstDay = DateTime(today.year, today.month, 1);
-      final lastDay = DateTime(today.year, today.month + 1, 0);
-      _startDateController.text = _formatDate(firstDay);
-      _endDateController.text = _formatDate(lastDay);
-    } else if (option == DateRangeOption.custom) {
-      await _pickDateRange();
-    }
-  }
-
-  /// Updates the number of daily dosages and ensures a matching list of time controllers.
   void _updateDosageCount(String value) {
     final count = int.tryParse(value) ?? 1;
-    if (count > 0) {
-      setState(() {
-        _dosageCount = count;
-        if (_timeControllers.length < _dosageCount) {
-          for (var i = _timeControllers.length; i < _dosageCount; i++) {
-            _timeControllers.add(TextEditingController());
-          }
-        } else if (_timeControllers.length > _dosageCount) {
-          _timeControllers = _timeControllers.sublist(0, _dosageCount);
+    if (count > 0 && count <= 8) {
+      // Dispose unused controllers
+      if (count < _timeControllers.length) {
+        for (int i = count; i < _timeControllers.length; i++) {
+          _timeControllers[i].dispose();
         }
-      });
-    }
-  }
-
-  /// Builds the frequency dropdown.
-  Widget _buildFrequencySelector() {
-    return DropdownButtonFormField<String>(
-      value: _frequency,
-      decoration: InputDecoration(
-        labelText: "Frequency",
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-      items: ["Daily", "Weekly", "Custom"]
-          .map((value) => DropdownMenuItem(value: value, child: Text(value)))
-          .toList(),
-      onChanged: (val) {
-        setState(() {
-          _frequency = val!;
-        });
-      },
-    );
-  }
-
-  /// When Weekly frequency is chosen, allows user to select a single day.
-  Widget _buildWeeklySelector() {
-    final days = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday'
-    ];
-    return Wrap(
-      spacing: 8.0,
-      children: days.map((day) {
-        return ChoiceChip(
-          label: Text(day),
-          selected: _selectedWeeklyDay == day,
-          onSelected: (selected) {
-            if (selected) setState(() => _selectedWeeklyDay = day);
-          },
-        );
-      }).toList(),
-    );
-  }
-
-  /// When Custom frequency is chosen, allows user to select multiple days.
-  Widget _buildCustomDaysSelector() {
-    return Wrap(
-      spacing: 8.0,
-      children: _selectedCustomDays.keys.map((day) {
-        return FilterChip(
-          label: Text(day),
-          selected: _selectedCustomDays[day] ?? false,
-          onSelected: (selected) {
-            setState(() {
-              _selectedCustomDays[day] = selected;
-            });
-          },
-        );
-      }).toList(),
-    );
-  }
-
-  /// Validates the form, builds the reminder data map, and saves it to Firestore.
-  Future<void> _submitReminder() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    // Prepare the days field based on frequency.
-    dynamic daysSelected;
-    if (_frequency == "Weekly") {
-      daysSelected = [_selectedWeeklyDay];
-    } else if (_frequency == "Custom") {
-      daysSelected = _selectedCustomDays.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList();
-    } else {
-      daysSelected = "Daily";
-    }
-
-    // Build the reminder data map.
-    Map<String, dynamic> reminderData = {
-      "pillName": _medicineController.text.trim(),
-      "dosage": _dosageController.text.trim(),
-      "unit": _unitController.text.trim(),
-      "times": _timeControllers.map((c) => c.text.trim()).toList(),
-      "startDate": _startDateController.text.trim(),
-      "endDate": _endDateController.text.trim(),
-      "frequency": _frequency,
-      "days": daysSelected,
-      "createdAt": FieldValue.serverTimestamp(),
-    };
-
-    try {
-      final User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("User not authenticated.")));
-        return;
       }
-      final uid = user.uid;
-      CollectionReference remindersRef = FirebaseFirestore.instance
-          .collection('patient')
-          .doc(uid)
-          .collection('Medications');
-      await remindersRef.add(reminderData);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Pill reminder set successfully.")));
-      Navigator.pop(context);
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error saving reminder: $e")));
+      setState(() => _timeControllers = List.generate(
+          count,
+          (i) => i < _timeControllers.length
+              ? _timeControllers[i]
+              : TextEditingController())
+        ..forEach((c) => c.text.isEmpty ? c.text = '00:00' : null));
     }
   }
 
-  @override
-  void dispose() {
-    _medicineController.dispose();
-    _dosageController.dispose();
-    _unitController.dispose();
-    _startDateController.dispose();
-    _endDateController.dispose();
-    _timeControllers.forEach((controller) => controller.dispose());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("Pill Reminder"),
-        backgroundColor: Colors.blueAccent,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
+  Widget _buildMedicineSection() => Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Medicine Name
+              const Text("Medication Details",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _medicineController,
-                decoration: InputDecoration(
-                  labelText: "Medicine Name",
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                decoration: const InputDecoration(
+                  labelText: "Medicine Name*",
+                  prefixIcon: Icon(Icons.medication),
                 ),
-                validator: (value) => value == null || value.isEmpty
-                    ? "Enter medicine name"
-                    : null,
+                validator: (v) => v!.trim().isEmpty ? "Required field" : null,
               ),
-              SizedBox(height: 16),
-              // Dosage and Unit
+            ],
+          ),
+        ),
+      );
+
+  Widget _buildDosageSection() => Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Dosage Information",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
                     child: TextFormField(
                       controller: _dosageController,
-                      decoration: InputDecoration(
-                        labelText: "Dosage",
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
                       keyboardType: TextInputType.number,
-                      validator: (value) => value == null || value.isEmpty
-                          ? "Enter dosage"
-                          : null,
+                      decoration: const InputDecoration(
+                          labelText: "Amount*", hintText: "e.g., 500"),
+                      validator: (v) {
+                        if (v!.isEmpty) return "Required field";
+                        final amount = double.tryParse(v);
+                        if (amount == null) return "Invalid number";
+                        if (amount <= 0) return "Must be positive";
+                        if (amount > 1000) return "Max 1000";
+                        return null;
+                      },
                     ),
                   ),
-                  SizedBox(width: 16),
+                  const SizedBox(width: 16),
                   Expanded(
-                    child: TextFormField(
-                      controller: _unitController,
-                      decoration: InputDecoration(
-                        labelText: "Unit (mg, ml, etc.)",
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedUnit,
+                      decoration: const InputDecoration(
+                        labelText: "Unit*",
                       ),
-                      validator: (value) =>
-                          value == null || value.isEmpty ? "Enter unit" : null,
+                      items: _units
+                          .map((unit) => DropdownMenuItem(
+                                value: unit,
+                                child: Text(unit),
+                              ))
+                          .toList(),
+                      validator: (v) => v == null ? "Select unit" : null,
+                      onChanged: (v) => setState(() => _selectedUnit = v!),
                     ),
                   ),
                 ],
               ),
-              SizedBox(height: 16),
-              // Number of Daily Dosages
+              const SizedBox(height: 16),
               TextFormField(
-                decoration: InputDecoration(
-                  labelText: "Number of Daily Dosages",
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                keyboardType: TextInputType.number,
                 initialValue: "1",
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                    labelText: "Daily Doses*",
+                    hintText: "How many times per day?"),
+                validator: (v) {
+                  final count = int.tryParse(v ?? '');
+                  if (count == null || count < 1) return "Enter 1-8";
+                  if (count > 8) return "Max 8 doses";
+                  return null;
+                },
                 onChanged: _updateDosageCount,
               ),
-              SizedBox(height: 16),
-              // Time Pickers
-              Column(
-                children: List.generate(_dosageCount, (index) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: GestureDetector(
-                      onTap: () => _pickTime(index),
-                      child: AbsorbPointer(
-                        child: TextFormField(
-                          controller: _timeControllers[index],
-                          decoration: InputDecoration(
-                            labelText: "Time ${index + 1} (HH:mm)",
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                          ),
-                          validator: (value) => value == null || value.isEmpty
-                              ? "Select time"
-                              : null,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-              SizedBox(height: 16),
-              // Date Range (Start & End)
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _startDateController,
-                      decoration: InputDecoration(
-                        labelText: "Start Date",
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      readOnly: true,
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _startDateController.text = _formatDate(picked);
-                          });
-                        }
-                      },
-                      validator: (value) => value == null || value.isEmpty
-                          ? "Select start date"
-                          : null,
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _endDateController,
-                      decoration: InputDecoration(
-                        labelText: "End Date",
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      readOnly: true,
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _endDateController.text = _formatDate(picked);
-                          });
-                        }
-                      },
-                      validator: (value) => value == null || value.isEmpty
-                          ? "Select end date"
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 16),
-              // Date Range Options (Forever, This Month, Custom)
-              Column(
-                children: [
-                  RadioListTile<DateRangeOption>(
-                    title: Text("Forever"),
-                    value: DateRangeOption.forever,
-                    groupValue: _dateRangeOption,
-                    onChanged: _onDateRangeOptionChanged,
-                  ),
-                  RadioListTile<DateRangeOption>(
-                    title: Text("This Month"),
-                    value: DateRangeOption.thisMonth,
-                    groupValue: _dateRangeOption,
-                    onChanged: _onDateRangeOptionChanged,
-                  ),
-                  RadioListTile<DateRangeOption>(
-                    title: Text("Custom Range"),
-                    value: DateRangeOption.custom,
-                    groupValue: _dateRangeOption,
-                    onChanged: _onDateRangeOptionChanged,
-                  ),
-                ],
-              ),
-              SizedBox(height: 16),
-              // Frequency and Days Selector
-              _buildFrequencySelector(),
-              SizedBox(height: 16),
-              if (_frequency == "Weekly") _buildWeeklySelector(),
-              if (_frequency == "Custom") _buildCustomDaysSelector(),
-              SizedBox(height: 24),
-              // Submit Button
-              ElevatedButton(
-                onPressed: _submitReminder,
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.blueAccent,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                child: Text("Set Reminder", style: TextStyle(fontSize: 18)),
-              ),
+              ...List.generate(
+                  _timeControllers.length, (i) => _buildTimeField(i)),
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
+
+  Widget _buildDateRangeSelector() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Duration*", style: TextStyle(fontSize: 16)),
+          Column(
+            children: [
+              RadioListTile<DateRangeOption>(
+                title: const Text("No End Date"),
+                value: DateRangeOption.forever,
+                groupValue: _dateRangeOption,
+                onChanged: _handleDateRangeSelection,
+                dense: true,
+              ),
+              RadioListTile<DateRangeOption>(
+                title: const Text("This Month Only"),
+                value: DateRangeOption.thisMonth,
+                groupValue: _dateRangeOption,
+                onChanged: _handleDateRangeSelection,
+                dense: true,
+              ),
+              RadioListTile<DateRangeOption>(
+                title: const Text("Custom Date Range"),
+                value: DateRangeOption.custom,
+                groupValue: _dateRangeOption,
+                onChanged: _handleDateRangeSelection,
+                dense: true,
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildDateField(_startDateController, "Start Date*")),
+              if (_dateRangeOption == DateRangeOption.custom) ...[
+                const SizedBox(width: 16),
+                Expanded(
+                    child: _buildDateField(_endDateController, "End Date*")),
+              ],
+            ],
+          ),
+          if (_dateRangeOption != DateRangeOption.forever)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextFormField(
+                controller: _endDateController,
+                readOnly: true,
+                enabled: false,
+                decoration: InputDecoration(
+                  labelText: "Auto-calculated end date",
+                  filled: true,
+                  fillColor: Colors.grey[200],
+                ),
+              ),
+            ),
+        ],
+      );
+
+  // ... [Keep other existing building methods] ...
+
+  Map<String, dynamic> _buildReminderData() => {
+        "medicine": _medicineController.text.trim(),
+        "dose": "${_dosageController.text.trim()} $_selectedUnit",
+        // ... [rest of the data structure] ...
+      };
+
+  Widget _buildTimeField(int index) => Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: GestureDetector(
+          onTap: () => _selectTime(index),
+          child: AbsorbPointer(
+            child: TextFormField(
+              controller: _timeControllers[index],
+              decoration: InputDecoration(
+                labelText: "Dose ${index + 1} Time*",
+                prefixIcon: const Icon(Icons.access_time),
+              ),
+              validator: (v) {
+                if (v!.isEmpty) return "Select time";
+                if (!RegExp(r'^([01]\d|2[0-3]):([0-5]\d)$').hasMatch(v)) {
+                  return "Use HH:MM format";
+                }
+
+                final now = TimeOfDay.now();
+                final entered = v.split(':');
+                final hour = int.parse(entered[0]);
+                final minute = int.parse(entered[1]);
+
+                if (hour > 23 || minute > 59) return "Invalid time";
+                return null;
+              },
+            ),
+          ),
+        ),
+      );
 }

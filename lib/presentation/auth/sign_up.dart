@@ -1,15 +1,16 @@
+// sign_up.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:oculoo02/Guardian/home.dart';
+import 'package:oculoo02/Patient/home_screen.dart';
+import 'package:oculoo02/core/configs/theme/app_color.dart';
 import 'package:oculoo02/presentation/auth/sign_in.dart';
 import 'package:oculoo02/presentation/widgets/isPatient.dart';
-import 'package:oculoo02/core/configs/theme/app_color.dart';
 import 'package:oculoo02/presentation/widgets/textfield.dart';
-import 'package:oculoo02/Patient/home_screen.dart';
-import 'package:oculoo02/Guardian/home.dart'; // Import Guardian home
 
 class SignUp extends StatefulWidget {
-  const SignUp({Key? key}) : super(key: key);
+  const SignUp({super.key});
 
   @override
   State<SignUp> createState() => _SignUpState();
@@ -20,26 +21,48 @@ class _SignUpState extends State<SignUp> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController cpasswordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureCPassword = true;
   bool _isGuardian = false;
 
-  Future<void> createAccount(BuildContext context) async {
-    String name = nameController.text.trim();
-    String email = emailController.text.trim();
-    String password = passwordController.text.trim();
-    String cpassword = cpasswordController.text.trim();
+  // sign_up.dart (updated validations section)
+  Future<void> createAccount() async {
+    final name = nameController.text.trim();
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    final cpassword = cpasswordController.text.trim();
 
-    // Check for empty fields
+    // Validation checks
     if (name.isEmpty ||
         email.isEmpty ||
         password.isEmpty ||
         cpassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in all the details")),
+        const SnackBar(content: Text("Please fill in all fields")),
       );
       return;
     }
 
-    // Check if passwords match
+    // Email validation
+    if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+        .hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a valid email address")),
+      );
+      return;
+    }
+
+    // Password complexity validation
+    if (!RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$')
+        .hasMatch(password)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                "Password must contain:\n- 8+ characters\n- 1 uppercase\n- 1 lowercase\n- 1 number\n- 1 special character")),
+      );
+      return;
+    }
+
     if (password != cpassword) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Passwords do not match")),
@@ -48,18 +71,12 @@ class _SignUpState extends State<SignUp> {
     }
 
     try {
-      // Create the user account via Firebase Authentication
-      UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
 
-      String uid = userCredential.user!.uid;
-      // Determine role based on toggle
-      String role = _isGuardian ? 'guardian' : 'patient';
+      final uid = userCredential.user!.uid;
+      final role = _isGuardian ? 'guardian' : 'patient';
 
-      // Save user details in Firestore under the appropriate collection
       await FirebaseFirestore.instance.collection(role).doc(uid).set({
         'name': name,
         'email': email,
@@ -70,14 +87,15 @@ class _SignUpState extends State<SignUp> {
         const SnackBar(content: Text("Account created successfully!")),
       );
 
-      // Clear the navigation stack and redirect based on user role
       Navigator.popUntil(context, (route) => route.isFirst);
       if (role == 'patient') {
-        Navigator.of(context).pushReplacement(
+        Navigator.pushReplacement(
+          context,
           MaterialPageRoute(builder: (_) => const HomePage()),
         );
-      } else if (role == 'guardian') {
-        Navigator.of(context).pushReplacement(
+      } else {
+        Navigator.pushReplacement(
+          context,
           MaterialPageRoute(builder: (_) => GuardianHomePage()),
         );
       }
@@ -86,14 +104,14 @@ class _SignUpState extends State<SignUp> {
       if (e.code == 'weak-password') {
         errorMessage = "The password provided is too weak.";
       } else if (e.code == 'email-already-in-use') {
-        errorMessage = "The account already exists for that email.";
+        errorMessage = "Account already exists for this email.";
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(errorMessage)));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("An unexpected error occurred: $e")),
+        SnackBar(
+            content: Text("An unexpected error occurred: ${e.toString()}")),
       );
     }
   }
@@ -107,7 +125,6 @@ class _SignUpState extends State<SignUp> {
           padding: const EdgeInsets.all(20.0),
           child: Column(
             children: [
-              // Logo or Image
               ClipOval(
                 child: Image.asset(
                   'assets/images/face_id1.gif',
@@ -117,8 +134,6 @@ class _SignUpState extends State<SignUp> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Title
               const Text(
                 "Create Account",
                 style: TextStyle(
@@ -127,9 +142,7 @@ class _SignUpState extends State<SignUp> {
                   color: Colors.black,
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // Input Fields
+              const SizedBox(height: 25),
               Textfield(lbl: "Full Name", controller: nameController),
               const SizedBox(height: 15),
               Textfield(lbl: "Email", controller: emailController),
@@ -137,34 +150,34 @@ class _SignUpState extends State<SignUp> {
               Textfield(
                 lbl: "Password",
                 controller: passwordController,
-                obscureText: true,
-                icon: Icons.visibility_off,
+                obscureText: _obscurePassword,
+                icon:
+                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                onIconPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
               ),
               const SizedBox(height: 15),
               Textfield(
                 lbl: "Confirm Password",
                 controller: cpasswordController,
-                obscureText: true,
-                icon: Icons.visibility_off,
+                obscureText: _obscureCPassword,
+                icon:
+                    _obscureCPassword ? Icons.visibility_off : Icons.visibility,
+                onIconPressed: () =>
+                    setState(() => _obscureCPassword = !_obscureCPassword),
               ),
               const SizedBox(height: 25),
               IsGuardian(
-                onChanged: (value) {
-                  setState(() {
-                    _isGuardian = value; // Update the toggle state
-                  });
-                },
+                onChanged: (value) => setState(() => _isGuardian = value),
               ),
-
-              // Sign Up Button
+              const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => createAccount(context),
+                  onPressed: createAccount,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    backgroundColor:
-                        Colors.blue, // Customize button color if needed
+                    backgroundColor: Colors.blue,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -175,15 +188,12 @@ class _SignUpState extends State<SignUp> {
                   ),
                 ),
               ),
-              const SizedBox(height: 15),
-
-              // Already have an account? Sign In
+              const SizedBox(height: 20),
               TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => SignIn()),
-                  );
-                },
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SignIn()),
+                ),
                 child: const Text(
                   "Already have an account? Sign In",
                   style: TextStyle(color: Colors.blue),
