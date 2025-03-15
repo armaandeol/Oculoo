@@ -27,13 +27,29 @@ class SignIn extends StatelessWidget {
     return 'unknown';
   }
 
+  // Email validation function
+  bool _isValidEmail(String email) {
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    return emailRegex.hasMatch(email);
+  }
+
   void login(BuildContext context) async {
     String email = emailController.text.trim();
     String password = passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
-      print("Please fill in all the details");
-      // Optionally show a snackbar or dialog here.
+    // Enhanced validation
+    if (email.isEmpty) {
+      _showErrorMessage(context, "Email field cannot be empty");
+      return;
+    }
+
+    if (!_isValidEmail(email)) {
+      _showErrorMessage(context, "Please enter a valid email address");
+      return;
+    }
+
+    if (password.isEmpty) {
+      _showErrorMessage(context, "Password field cannot be empty");
       return;
     }
 
@@ -57,15 +73,42 @@ class SignIn extends StatelessWidget {
               MaterialPageRoute(builder: (context) => GuardianHomePage()));
           print("Guardian");
         } else {
-          // Handle unknown role (optional)
-          print("User role unknown");
+          // Handle unknown role
+          _showErrorMessage(
+              context, "User role unknown. Please contact support.");
         }
-        print("Logged in");
       }
     } on FirebaseAuthException catch (ex) {
-      print(ex.code.toString());
-      // Optionally, show a message to the user based on the error code.
+      // Handle specific Firebase Auth errors
+      switch (ex.code) {
+        case 'user-not-found':
+          _showErrorMessage(context, "No account found with this email");
+          break;
+        case 'wrong-password':
+          _showErrorMessage(context, "Incorrect password");
+          break;
+        case 'invalid-email':
+          _showErrorMessage(context, "Invalid email format");
+          break;
+        case 'user-disabled':
+          _showErrorMessage(context, "This account has been disabled");
+          break;
+        default:
+          _showErrorMessage(context, "Login failed: ${ex.message}");
+      }
+    } catch (e) {
+      _showErrorMessage(context, "An unexpected error occurred");
     }
+  }
+
+  void _showErrorMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   @override

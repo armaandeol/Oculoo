@@ -8,11 +8,26 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'Guardian/home.dart';
 import 'auth.dart';
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:convert';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   tz.initializeTimeZones();
+  await FlutterLocalNotificationsPlugin().initialize(
+    InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ),
+    onDidReceiveNotificationResponse: (response) {
+      final payload = response.payload;
+      if (payload != null) {
+        final data = jsonDecode(payload);
+        // Handle notification tap with payload data
+      }
+    },
+  );
   runApp(MyApp());
 }
 
