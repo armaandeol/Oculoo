@@ -29,13 +29,13 @@ class _PillReminderPageState extends State<PillReminderPage> {
   String _frequency = 'Daily'; // Options: Daily, Weekly, Custom
   String _selectedWeeklyDay = 'Monday';
   Map<String, bool> _selectedCustomDays = {
-    'Mon': false,
-    'Tue': false,
-    'Wed': false,
-    'Thu': false,
-    'Fri': false,
-    'Sat': false,
-    'Sun': false
+    'Monday': false,
+    'Tuesday': false,
+    'Wednesday': false,
+    'Thursday': false,
+    'Friday': false,
+    'Saturday': false,
+    'Sunday': false
   };
 
   DateRangeOption _dateRangeOption = DateRangeOption.forever;
