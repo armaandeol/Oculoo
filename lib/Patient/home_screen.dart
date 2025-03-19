@@ -18,6 +18,35 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  bool isMedicationScheduledOnDate(Map<String, dynamic> med, DateTime date) {
+    try {
+      final startDate =
+          DateFormat('yyyy-MM-dd').parse(med['startDate'] as String);
+      final endDate = DateFormat('yyyy-MM-dd').parse(med['endDate'] as String);
+
+      if (date.isBefore(startDate) || date.isAfter(endDate)) {
+        return false;
+      }
+    } catch (e) {
+      print('Error parsing dates: $e');
+      return false;
+    }
+
+    final frequency = med['frequency'] as String? ?? 'Daily';
+    final days = med['days'] as List<dynamic>? ?? [];
+
+    if (frequency == 'Daily') {
+      return true;
+    }
+
+    if (frequency == 'Weekly' || frequency == 'Custom') {
+      final dayName = DateFormat('EEEE').format(date);
+      return days.contains(dayName);
+    }
+
+    return false;
+  }
+
   final int initialDays = 14;
   late DateTime _startDate;
   DateTime? _selectedDate;
@@ -36,7 +65,7 @@ class _HomePageState extends State<HomePage> {
     tz.initializeTimeZones();
 
     // For testing with sample data.
-    _startDate = DateTime(2025, 2, 15);
+    _startDate = DateTime.now(); // Changed from DateTime(2025, 2, 15)
     _selectedDate = _startDate;
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
 
@@ -496,25 +525,33 @@ class _HomePageState extends State<HomePage> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
+
             final docs = snapshot.data?.docs ?? [];
-            if (docs.isEmpty) {
+            final filteredDocs = docs.where((doc) {
+              final med = doc.data() as Map<String, dynamic>;
+              return isMedicationScheduledOnDate(med, _selectedDate!);
+            }).toList();
+
+            if (filteredDocs.isEmpty) {
               return Padding(
                 padding: EdgeInsets.symmetric(vertical: size.height * 0.02),
-                child: Center(child: Text('No medication reminders found.')),
+                child: Center(child: Text('No medications for selected date')),
               );
             }
+
             return ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: docs.length,
+              itemCount: filteredDocs.length,
               itemBuilder: (ctx, i) {
-                final med = docs[i].data() as Map<String, dynamic>;
+                final med = filteredDocs[i].data() as Map<String, dynamic>;
+                final String docId = filteredDocs[i].id;
                 final nextTime =
                     computeNextScheduledTime(med, _selectedDate!) ??
                         DateTime(_selectedDate!.year, _selectedDate!.month,
                             _selectedDate!.day, 0, 0);
                 return Dismissible(
-                  key: Key(docs[i].id),
+                  key: Key(docId),
                   direction: DismissDirection.endToStart,
                   background: Container(
                     color: Colors.red,
@@ -525,7 +562,8 @@ class _HomePageState extends State<HomePage> {
                   onDismissed: (_) async {
                     await docs[i].reference.delete();
                   },
-                  child: _buildMedicationItem(med, nextTime, size),
+                  child: _buildMedicationItem(
+                      med, nextTime, docId, size), // Pass docId here
                 );
               },
             );
@@ -536,7 +574,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildMedicationItem(
-      Map<String, dynamic> med, DateTime nextTime, Size size) {
+      Map<String, dynamic> med, DateTime nextTime, String docId, Size size) {
+    if (!isMedicationScheduledOnDate(med, _selectedDate!)) {
+      return SizedBox.shrink(); // Don't render if not scheduled
+    }
     bool isToday = isSameDay(_selectedDate!, DateTime.now());
     String timeInfo = "";
     if (isToday) {
@@ -636,15 +677,21 @@ class _HomePageState extends State<HomePage> {
                         .collection('patient')
                         .doc(uid)
                         .collection('Medications')
-                        .doc(med[
-                            'docId']) // You might need to pass the document ID.
+                        .doc(docId) // Use the passed docId
                         .delete();
 
+                    int notificationId =
+                        med['createdAt']?.toString().hashCode ??
+                            DateTime.now().millisecondsSinceEpoch;
                     // Cancel any pending notifications
                     await flutterLocalNotificationsPlugin
-                        .cancel(med['createdAt'].toString().hashCode);
+                        .cancel(notificationId);
                   } catch (e) {
                     print('Error deleting medication: $e');
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error deleting medication: $e')),
+                    );
                   }
                 },
               ),
@@ -713,18 +760,26 @@ class _HomePageState extends State<HomePage> {
               physics: const NeverScrollableScrollPhysics(),
               itemCount: docs.length,
               itemBuilder: (ctx, i) {
-                final log = docs[i].data() as Map<String, dynamic>;
-                final isCorrect = log['is_correct'] ?? false;
-
-                return _buildLogCard(
-                  context: context,
-                  medicine: log['medication'] ?? 'Unknown Medicine',
-                  status: log['status'] ?? 'No status',
-                  time: log['taken_at'] ?? 'No time',
-                  isCorrect: isCorrect,
-                  timeDifference: log['time_difference'] ?? '',
-                  dosage: log['dosage'] ?? '',
-                  size: size,
+                final med = docs[i].data() as Map<String, dynamic>;
+                final docId = docs[i].id; // Get the actual document ID
+                final nextTime =
+                    computeNextScheduledTime(med, _selectedDate!) ??
+                        DateTime(_selectedDate!.year, _selectedDate!.month,
+                            _selectedDate!.day, 0, 0);
+                return Dismissible(
+                  key: Key(docs[i].id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: EdgeInsets.only(right: size.width * 0.05),
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+                  onDismissed: (_) async {
+                    await docs[i].reference.delete();
+                  },
+                  child: _buildMedicationItem(
+                      med, nextTime, docId, size), // Pass docId
                 );
               },
             );
