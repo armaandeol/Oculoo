@@ -21,6 +21,8 @@ dependencies:
   image_picker:
   qr_flutter: ^4.0.0
   flutter_local_notifications:
+  timezone:
+  android_intent_plus: ^4.0.0
 
 dev_dependencies:
   flutter_test:
