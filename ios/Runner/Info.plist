@@ -59,7 +59,5 @@
 <string>We use notifications to remind you about your schedule.</string>
 <key>NSUserNotificationUsageDescription</key>
 <string>We use notifications to remind you about important updates.</string>
-<key>NSRemindersUsageDescription</key>
-<string>To show medication reminders</string>
 </dict>
 </plist>

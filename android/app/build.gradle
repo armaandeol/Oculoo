@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.open_settings"
+    namespace = "com.example.oculoo02"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 

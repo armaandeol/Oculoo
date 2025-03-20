@@ -2,8 +2,6 @@
 
     <!-- Add this permission for Android 13+ to allow posting notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- Add this line inside the <manifest> tag, before the <application> tag -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:label="oculoo02"
@@ -35,17 +33,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-            
-        <!-- Flutter Local Notifications Plugin Configuration -->
-        <meta-data
-            android:name="com.dexterous.flutterlocalnotifications.default_notification_channel_id"
-            android:value="medication_channel" />
-        <meta-data
-            android:name="com.dexterous.flutterlocalnotifications.default_notification_channel_name"
-            android:value="Medication Reminders" />
-        <meta-data
-            android:name="com.dexterous.flutterlocalnotifications.default_notification_channel_description"
-            android:value="Notifications for medication reminders" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
