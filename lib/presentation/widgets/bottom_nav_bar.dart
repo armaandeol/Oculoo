@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:oculoo02/Patient/pages/add_medications.dart';
 import 'package:oculoo02/Patient/home_screen.dart';
-import 'package:oculoo02/Patient/pages/log_medicine.dart';
+import 'package:oculoo02/Patient/pages/profile_page.dart';
 
 class BottomNavBarCustome extends StatelessWidget {
   const BottomNavBarCustome({super.key});
@@ -20,6 +20,7 @@ class BottomNavBarCustome extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Home Button
           Expanded(
             child: GestureDetector(
               onTap: () {
@@ -34,6 +35,7 @@ class BottomNavBarCustome extends StatelessWidget {
               ),
             ),
           ),
+          // Add Medication Button
           Expanded(
             child: GestureDetector(
               onTap: () {
@@ -48,12 +50,13 @@ class BottomNavBarCustome extends StatelessWidget {
               ),
             ),
           ),
+          // Profile Button
           Expanded(
             child: GestureDetector(
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => LogMedicinePage()),
+                  MaterialPageRoute(builder: (context) => ProfilePage()),
                 );
               },
               child: const Icon(
