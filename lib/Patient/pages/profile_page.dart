@@ -121,102 +121,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // Check if the patient has a guardian linked or a pending request
-  Future<void> _checkGuardianStatus() async {
-    setState(() => _isLoadingGuardian = true);
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      // Check for existing linkage
-      final linkageSnapshot = await FirebaseFirestore.instance
-          .collection('linkages')
-          .where('patientUID', isEqualTo: user.uid)
-          .orderBy('timestamp', descending: true) // Get most recent first
-          .limit(1) // Only need the most recent one
-          .get();
-
-      if (linkageSnapshot.docs.isEmpty) {
-        setState(() {
-          _guardianId = null;
-          _guardianName = null;
-          _guardianStatus = null;
-          _isLoadingGuardian = false;
-        });
-        return;
-      }
-
-      // Get the most recent linkage
-      final linkage = linkageSnapshot.docs.first.data();
-      final guardianId = linkage['guardianUID'];
-      final status = linkage['status'];
-
-      // Only process accepted or pending statuses
-      if (status != 'pending' && status != 'accepted') {
-        setState(() {
-          _guardianId = null;
-          _guardianName = null;
-          _guardianStatus = null;
-          _isLoadingGuardian = false;
-        });
-        return;
-      }
-
-      // Get guardian name
-      if (guardianId != null) {
-        final guardianDoc = await FirebaseFirestore.instance
-            .collection('guardian')
-            .doc(guardianId)
-            .get();
-
-        setState(() {
-          _guardianId = guardianId;
-          _guardianName =
-              guardianDoc.exists ? guardianDoc['name'] : 'Unknown Guardian';
-          _guardianStatus = status;
-          _isLoadingGuardian = false;
-        });
-      }
-    } catch (e) {
-      print("Error checking guardian status: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error checking guardian status: $e')),
-      );
-      setState(() => _isLoadingGuardian = false);
-    }
-  }
-
-  // Show dialog to add a guardian
-  void _showAddGuardianDialog() {
-    _guardianUidController.clear();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Add Guardian'),
-        content: TextField(
-          controller: _guardianUidController,
-          decoration: InputDecoration(
-            labelText: 'Guardian UID',
-            hintText: 'Enter the guardian\'s UID',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _sendGuardianRequest();
-            },
-            child: Text('Send Request'),
-          ),
-        ],
-      ),
-    );
-  }
-
   // Send request to guardian - first check if user exists
   Future<void> _sendGuardianRequest() async {
     setState(() => _isLoading = true);
@@ -267,8 +171,8 @@ class _ProfilePageState extends State<ProfilePage> {
           .get();
       final patientName = patientDoc['name'] ?? 'Patient';
 
-      // Create linkage request
-      await FirebaseFirestore.instance.collection('linkages').add({
+      // Create linkage request in root collection
+      final linkageData = {
         'patientUID': user.uid,
         'guardianUID': guardianUid,
         'initiator': 'patient',
@@ -276,6 +180,21 @@ class _ProfilePageState extends State<ProfilePage> {
         'timestamp': FieldValue.serverTimestamp(),
         'patientName': patientName,
         'guardianName': guardianDoc['name'],
+      };
+
+      // Add to main linkages collection
+      await FirebaseFirestore.instance.collection('linkages').add(linkageData);
+
+      // Add linkage to patient's collection as well
+      await FirebaseFirestore.instance
+          .collection('patient')
+          .doc(user.uid)
+          .collection('linkages')
+          .doc(
+              guardianUid) // Use guardian UID as document ID for easy reference
+          .set({
+        ...linkageData,
+        'timestamp': FieldValue.serverTimestamp(), // Refresh timestamp
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -296,6 +215,224 @@ class _ProfilePageState extends State<ProfilePage> {
       );
       setState(() => _isLoading = false);
     }
+  }
+
+  // Check if the patient has a guardian linked or a pending request
+  Future<void> _checkGuardianStatus() async {
+    setState(() => _isLoadingGuardian = true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // First check the main linkages collection for the most up-to-date status
+      try {
+        final linkageSnapshot = await FirebaseFirestore.instance
+            .collection('linkages')
+            .where('patientUID', isEqualTo: user.uid)
+            .orderBy('timestamp', descending: true)
+            .limit(1)
+            .get();
+
+        // If there's an active linkage in the main collection
+        if (linkageSnapshot.docs.isNotEmpty) {
+          final mainLinkage = linkageSnapshot.docs.first.data();
+          final guardianId = mainLinkage['guardianUID'];
+          final status = mainLinkage['status'];
+
+          // If it's accepted or pending, update patient's collection and UI
+          if (status == 'accepted' || status == 'pending') {
+            // Get guardian name
+            final guardianDoc = await FirebaseFirestore.instance
+                .collection('guardian')
+                .doc(guardianId)
+                .get();
+
+            final guardianName =
+                guardianDoc.exists ? guardianDoc['name'] : 'Unknown Guardian';
+
+            // Update the patient's linkages collection to match main collection
+            await FirebaseFirestore.instance
+                .collection('patient')
+                .doc(user.uid)
+                .collection('linkages')
+                .doc(guardianId)
+                .set({
+              'patientUID': user.uid,
+              'guardianUID': guardianId,
+              'status': status,
+              'timestamp': FieldValue.serverTimestamp(),
+              'guardianName': guardianName,
+            }, SetOptions(merge: true));
+
+            // Update UI
+            setState(() {
+              _guardianId = guardianId;
+              _guardianName = guardianName;
+              _guardianStatus = status;
+              _isLoadingGuardian = false;
+            });
+            return;
+          }
+        }
+      } catch (e) {
+        // Handle specific Firestore index error - continue to fallback
+        print("Query requires index, using fallback method: $e");
+        // Don't show error to user, just use fallback method
+      }
+
+      // If no active linkage in main collection or if index error occurred,
+      // check patient's collection as fallback
+      final patientLinkagesSnapshot = await FirebaseFirestore.instance
+          .collection('patient')
+          .doc(user.uid)
+          .collection('linkages')
+          .get();
+
+      if (patientLinkagesSnapshot.docs.isNotEmpty) {
+        // Find most recent active linkage (accepted or pending)
+        DocumentSnapshot? activeLink;
+        for (var doc in patientLinkagesSnapshot.docs) {
+          final status = doc.data()['status'];
+          if (status == 'accepted' || status == 'pending') {
+            if (activeLink == null ||
+                (doc.data()['timestamp'] != null &&
+                    (activeLink.data() as Map<String, dynamic>)['timestamp'] !=
+                        null &&
+                    doc.data()['timestamp'].toDate().isAfter(
+                        (activeLink.data() as Map<String, dynamic>)['timestamp']
+                            .toDate()))) {
+              activeLink = doc;
+            }
+          }
+        }
+
+        if (activeLink != null) {
+          final linkage = activeLink.data() as Map<String, dynamic>;
+          setState(() {
+            _guardianId = linkage['guardianUID'];
+            _guardianName = linkage['guardianName'] ?? 'Guardian';
+            _guardianStatus = linkage['status'];
+            _isLoadingGuardian = false;
+          });
+          return;
+        }
+      }
+
+      // No active linkage found anywhere
+      setState(() {
+        _guardianId = null;
+        _guardianName = null;
+        _guardianStatus = null;
+        _isLoadingGuardian = false;
+      });
+    } catch (e) {
+      print("Error checking guardian status: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'Error loading guardian information. Please try again later.')),
+      );
+      setState(() => _isLoadingGuardian = false);
+    }
+  }
+
+  // Remove guardian linkage
+  Future<void> _removeGuardian() async {
+    setState(() => _isLoading = true);
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null || _guardianId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      // Get linkage document from main collection
+      final linkageSnapshot = await FirebaseFirestore.instance
+          .collection('linkages')
+          .where('patientUID', isEqualTo: user.uid)
+          .where('guardianUID', isEqualTo: _guardianId)
+          .get();
+
+      if (linkageSnapshot.docs.isNotEmpty) {
+        // Delete linkage from main collection
+        for (var doc in linkageSnapshot.docs) {
+          await doc.reference.delete();
+        }
+      }
+
+      // Also remove from patient's collection
+      await FirebaseFirestore.instance
+          .collection('patient')
+          .doc(user.uid)
+          .collection('linkages')
+          .doc(_guardianId)
+          .delete();
+
+      // Remove patient's entry from guardian's listing collection
+      final guardianListingSnapshot = await FirebaseFirestore.instance
+          .collection('guardian')
+          .doc(_guardianId)
+          .collection('listing')
+          .where('uid', isEqualTo: user.uid)
+          .get();
+
+      if (guardianListingSnapshot.docs.isNotEmpty) {
+        // Delete all matching entries
+        for (var doc in guardianListingSnapshot.docs) {
+          await doc.reference.delete();
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Guardian removed successfully')),
+      );
+
+      // Update UI
+      setState(() {
+        _guardianId = null;
+        _guardianName = null;
+        _guardianStatus = null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print("Error removing guardian: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error removing guardian: $e')),
+      );
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // Show dialog to add a guardian
+  void _showAddGuardianDialog() {
+    _guardianUidController.clear();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add Guardian'),
+        content: TextField(
+          controller: _guardianUidController,
+          decoration: InputDecoration(
+            labelText: 'Guardian UID',
+            hintText: 'Enter the guardian\'s UID',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _sendGuardianRequest();
+            },
+            child: Text('Send Request'),
+          ),
+        ],
+      ),
+    );
   }
 
   // Show dialog to confirm guardian removal
@@ -321,51 +458,6 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
     );
-  }
-
-  // Remove guardian linkage
-  Future<void> _removeGuardian() async {
-    setState(() => _isLoading = true);
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null || _guardianId == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      // Get linkage document
-      final linkageSnapshot = await FirebaseFirestore.instance
-          .collection('linkages')
-          .where('patientUID', isEqualTo: user.uid)
-          .where('guardianUID', isEqualTo: _guardianId)
-          .get();
-
-      if (linkageSnapshot.docs.isNotEmpty) {
-        // Delete linkage
-        for (var doc in linkageSnapshot.docs) {
-          await doc.reference.delete();
-        }
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Guardian removed successfully')),
-      );
-
-      // Update UI
-      setState(() {
-        _guardianId = null;
-        _guardianName = null;
-        _guardianStatus = null;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print("Error removing guardian: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error removing guardian: $e')),
-      );
-      setState(() => _isLoading = false);
-    }
   }
 
   // Helper to build guardian UI section

@@ -219,6 +219,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
           'status': 'active',
         });
 
+        // Update patient's linkage status from pending to accepted
+        await FirebaseFirestore.instance
+            .collection('patient')
+            .doc(patientId)
+            .collection('linkages')
+            .doc(user.uid) // Guardian's UID is the document ID
+            .update({
+          'status': 'accepted',
+          'acceptedAt': FieldValue.serverTimestamp(),
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text('Request accepted. Patient added to your list.')),

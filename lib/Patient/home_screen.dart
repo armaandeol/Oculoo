@@ -6,6 +6,7 @@ import 'package:oculoo02/presentation/widgets/bottom_nav_bar.dart';
 import 'package:oculoo02/core/configs/theme/app_color.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:oculoo02/Patient/pages/add_medications.dart';
 // Timezone packages for scheduled notifications.
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
@@ -326,6 +327,35 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Formats days list into a readable sentence
+  String _formatScheduledDays(List<dynamic> days) {
+    if (days.isEmpty) return "No specific days scheduled";
+    if (days.length == 7) return "Scheduled every day";
+
+    return "Scheduled for ${days.join(', ')}";
+  }
+
+  /// Formats a list of time strings to AM/PM format
+  String _formatTimeList(List<dynamic> times) {
+    List<String> formattedTimes = [];
+
+    for (var time in times) {
+      try {
+        List<String> parts = (time as String).split(":");
+        int hour = int.parse(parts[0]);
+        int minute = int.parse(parts[1]);
+
+        // Create a DateTime object to utilize DateFormat
+        final timeObj = DateTime(2023, 1, 1, hour, minute);
+        formattedTimes.add(DateFormat('h:mm a').format(timeObj));
+      } catch (e) {
+        formattedTimes.add(time.toString());
+      }
+    }
+
+    return "Scheduled at: ${formattedTimes.join(', ')}";
+  }
+
   /// Computes the next scheduled time for a medication on the selected day.
   DateTime? computeNextScheduledTime(
       Map<String, dynamic> med, DateTime selectedDate) {
@@ -376,7 +406,8 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: const BottomNavBarCustome(),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColor.primary,
-        onPressed: () => Navigator.pushNamed(context, '/add_medication'),
+        onPressed: () => Navigator.push(context,
+            MaterialPageRoute(builder: (context) => PillReminderPage())),
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: RefreshIndicator(
@@ -578,38 +609,53 @@ class _HomePageState extends State<HomePage> {
     if (!isMedicationScheduledOnDate(med, _selectedDate!)) {
       return SizedBox.shrink(); // Don't render if not scheduled
     }
-    bool isToday = isSameDay(_selectedDate!, DateTime.now());
+
+    // Time info formatting
     String timeInfo = "";
+    bool isToday = isSameDay(_selectedDate!, DateTime.now());
     if (isToday) {
       DateTime now = DateTime.now();
       if (nextTime.isAfter(now)) {
         Duration diff = nextTime.difference(now);
-        timeInfo = "in ${formatDuration(diff)}";
+        // If less than 1 hour, show minutes
+        if (diff.inHours < 1) {
+          timeInfo = "Next in ${diff.inMinutes} mins";
+        } else {
+          timeInfo = "Next at ${DateFormat('h:mm a').format(nextTime)}";
+        }
       } else {
-        timeInfo = "at ${DateFormat.Hm().format(nextTime)}";
+        timeInfo = "Next at ${DateFormat('h:mm a').format(nextTime)}";
       }
     } else {
-      timeInfo = "at ${DateFormat.Hm().format(nextTime)}";
+      timeInfo = "Next at ${DateFormat('h:mm a').format(nextTime)}";
     }
+
     Color cardColor = _getCardColor(med['frequency'] as String? ?? "Daily");
+    String dosageText = "${med['dosage']}${med['unit']}";
 
     return FadeIn(
       child: Card(
         color: cardColor,
-        elevation: 3,
+        elevation: 5,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(15),
         ),
         margin: EdgeInsets.symmetric(
-            vertical: size.height * 0.005, horizontal: size.width * 0.02),
+            vertical: size.height * 0.008, horizontal: size.width * 0.02),
         child: ExpansionTile(
           leading: Container(
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: Colors.blue.shade100,
-              borderRadius: BorderRadius.circular(25),
-            ),
+                color: Colors.blue.shade100,
+                borderRadius: BorderRadius.circular(25),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.shade200,
+                    blurRadius: 5,
+                    offset: Offset(0, 2),
+                  )
+                ]),
             child: Icon(
               Icons.medication,
               color: Colors.blue.shade800,
@@ -627,33 +673,38 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "Next: $timeInfo",
+                timeInfo,
                 style: TextStyle(
                   fontSize: size.width * 0.035,
                   color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              Text(
-                "Dosage: ${med['dosage']}${med['unit']}",
-                style: TextStyle(fontSize: size.width * 0.035),
+              Row(
+                children: [
+                  Text(
+                    dosageText,
+                    style: TextStyle(
+                      fontSize: size.width * 0.04,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // "Mark as Taken" button.
+              // "Mark as Taken" button
               IconButton(
                 icon: Icon(Icons.check_circle, color: Colors.green),
                 onPressed: () async {
-                  // Create a unique notification ID (using createdAt or fallback).
                   int notificationId = med['createdAt'].toString().hashCode;
-                  // Cancel any pending notification.
                   await flutterLocalNotificationsPlugin.cancel(notificationId);
 
-                  // TODO: Update your medication log in Firestore as needed.
-
-                  // Schedule the next reminder (if any) based on computed time.
+                  // Schedule the next reminder (if any) based on computed time
                   DateTime? nextDose =
                       computeNextScheduledTime(med, _selectedDate!);
                   if (nextDose != null && nextDose.isAfter(DateTime.now())) {
@@ -666,24 +717,22 @@ class _HomePageState extends State<HomePage> {
                   }
                 },
               ),
-              // Delete button.
+              // Delete button
               IconButton(
                 icon: Icon(Icons.delete, color: Colors.red),
                 onPressed: () async {
                   try {
                     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-                    // Ensure you use the document ID from your snapshot here.
                     await FirebaseFirestore.instance
                         .collection('patient')
                         .doc(uid)
                         .collection('Medications')
-                        .doc(docId) // Use the passed docId
+                        .doc(docId)
                         .delete();
 
                     int notificationId =
                         med['createdAt']?.toString().hashCode ??
                             DateTime.now().millisecondsSinceEpoch;
-                    // Cancel any pending notifications
                     await flutterLocalNotificationsPlugin
                         .cancel(notificationId);
                   } catch (e) {
@@ -699,23 +748,28 @@ class _HomePageState extends State<HomePage> {
           ),
           children: [
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Format days in a more readable way
                   Text(
-                    "Frequency: ${med['frequency']}",
-                    style: TextStyle(fontSize: size.width * 0.04),
-                  ),
-                  if (med['frequency'] == "Weekly" ||
-                      med['frequency'] == "Custom")
-                    Text(
-                      "Days: ${(med['days'] as List<dynamic>).join(', ')}",
-                      style: TextStyle(fontSize: size.width * 0.04),
+                    _formatScheduledDays(med['days'] as List<dynamic>? ?? []),
+                    style: TextStyle(
+                      fontSize: size.width * 0.04,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade800,
                     ),
+                  ),
+                  SizedBox(height: 8),
+                  // Format times in AM/PM style
                   Text(
-                    "Scheduled Times: ${(med['times'] as List<dynamic>).join(', ')}",
-                    style: TextStyle(fontSize: size.width * 0.04),
+                    _formatTimeList(med['times'] as List<dynamic>? ?? []),
+                    style: TextStyle(
+                      fontSize: size.width * 0.04,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade800,
+                    ),
                   ),
                 ],
               ),
