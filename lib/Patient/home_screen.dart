@@ -212,12 +212,11 @@ class _HomePageState extends State<HomePage> {
 
   // Function to show a notification when a new log is added.
   Future<void> showLogNotification(Map<String, dynamic> log) async {
-    final bool isCorrect = log['is_correct'] ?? false;
-    final String medicine = log['medication'] ?? 'Medicine';
-    final String dosage = log['dosage'] ?? '';
-    final String statusText = isCorrect ? 'correctly' : 'incorrectly';
-    final String title = 'Medication Log Added';
-    final String body = 'You took $dosage of $medicine $statusText.';
+    final bool isCorrect = log['verification_result'] ?? false;
+    final String title = isCorrect ? 'Correct Medication' : 'Wrong Medication';
+    final String body = isCorrect
+        ? 'Medicine detected correctly. Please go ahead and take your medicine.'
+        : 'Wrong medicine detected! Please make sure you have the correct one.';
 
     // Use a unique notification ID. Here we use the current time in milliseconds.
     int notificationId =
@@ -234,6 +233,7 @@ class _HomePageState extends State<HomePage> {
           channelDescription: 'Notifications for medication logs',
           importance: Importance.max,
           priority: Priority.high,
+          color: isCorrect ? Colors.green : Colors.red,
         ),
         iOS: const DarwinNotificationDetails(
           presentAlert: true,
@@ -790,7 +790,7 @@ class _HomePageState extends State<HomePage> {
               .collection('patient')
               .doc(uid)
               .collection('Logs')
-              .orderBy('taken_at', descending: true)
+              .orderBy('timestamp', descending: true)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -814,26 +814,74 @@ class _HomePageState extends State<HomePage> {
               physics: const NeverScrollableScrollPhysics(),
               itemCount: docs.length,
               itemBuilder: (ctx, i) {
-                final med = docs[i].data() as Map<String, dynamic>;
-                final docId = docs[i].id; // Get the actual document ID
-                final nextTime =
-                    computeNextScheduledTime(med, _selectedDate!) ??
-                        DateTime(_selectedDate!.year, _selectedDate!.month,
-                            _selectedDate!.day, 0, 0);
-                return Dismissible(
-                  key: Key(docs[i].id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    color: Colors.red,
-                    alignment: Alignment.centerRight,
-                    padding: EdgeInsets.only(right: size.width * 0.05),
-                    child: const Icon(Icons.delete, color: Colors.white),
+                final log = docs[i].data() as Map<String, dynamic>;
+                final isCorrect = log['verification_result'] ?? false;
+                final detectedPills =
+                    List<String>.from(log['detected_pills'] ?? []);
+                final expectedPills =
+                    List<String>.from(log['expected_pills'] ?? []);
+                final timestamp = DateTime.parse(log['timestamp'] as String);
+                final timeDiff = log['time_difference'] ?? 'N/A';
+                final ocrText = log['ocr_text'] ?? '';
+                final rawText = log['raw_ocr_text'] ?? '';
+
+                return Card(
+                  color: isCorrect ? Colors.green.shade50 : Colors.red.shade50,
+                  margin: EdgeInsets.symmetric(
+                    vertical: size.height * 0.005,
+                    horizontal: size.width * 0.02,
                   ),
-                  onDismissed: (_) async {
-                    await docs[i].reference.delete();
-                  },
-                  child: _buildMedicationItem(
-                      med, nextTime, docId, size), // Pass docId
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: isCorrect ? Colors.green : Colors.red,
+                      width: 2,
+                    ),
+                  ),
+                  child: ExpansionTile(
+                    leading: Icon(
+                      isCorrect ? Icons.check_circle : Icons.warning,
+                      color: isCorrect ? Colors.green : Colors.red,
+                    ),
+                    title: Text(
+                      detectedPills.isNotEmpty
+                          ? detectedPills.join(', ')
+                          : 'No Detection',
+                      style: TextStyle(
+                        fontSize: size.width * 0.045,
+                        fontWeight: FontWeight.bold,
+                        color: isCorrect
+                            ? Colors.green.shade800
+                            : Colors.red.shade800,
+                      ),
+                    ),
+                    subtitle: Text(
+                      DateFormat('MMM dd, yyyy - HH:mm').format(timestamp),
+                      style: TextStyle(
+                        fontSize: size.width * 0.035,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLogDetail(
+                                'Status:', log['status'] ?? 'Unknown'),
+                            _buildLogDetail('Time Difference:', timeDiff),
+                            _buildLogDetail(
+                                'Expected Pills:', expectedPills.join(', ')),
+                            _buildLogDetail(
+                                'Detected Pills:', detectedPills.join(', ')),
+                            _buildLogDetail('Processed OCR:', ocrText),
+                            _buildLogDetail('Raw OCR:', rawText),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
             );
@@ -843,107 +891,80 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildLogCard({
-    required BuildContext context,
-    required String medicine,
-    required String status,
-    required String time,
-    required bool isCorrect,
-    required String dosage,
-    required Size size,
-    required String timeDifference,
-  }) {
-    return Card(
-      color: isCorrect ? Colors.green.shade50 : Colors.red.shade50,
-      margin: EdgeInsets.symmetric(
-        vertical: size.height * 0.005,
-        horizontal: size.width * 0.02,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isCorrect ? Colors.green.shade100 : Colors.red.shade100,
-          width: 2,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
+  Widget _buildLogDetail(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey.shade800,
+          ),
           children: [
-            Icon(
-              isCorrect ? Icons.check_circle : Icons.error,
-              color: isCorrect ? Colors.green : Colors.red,
-              size: 32,
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        medicine,
-                        style: TextStyle(
-                          fontSize: size.width * 0.045,
-                          fontWeight: FontWeight.bold,
-                          color: isCorrect
-                              ? Colors.green.shade800
-                              : Colors.red.shade800,
-                          decoration:
-                              !isCorrect ? TextDecoration.lineThrough : null,
-                        ),
-                      ),
-                      Text(
-                        DateFormat('HH:mm').format(DateTime.parse(time)),
-                        style: TextStyle(
-                          fontSize: size.width * 0.035,
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Status: $status',
-                    style: TextStyle(
-                      fontSize: size.width * 0.035,
-                      color: isCorrect
-                          ? Colors.green.shade700
-                          : Colors.red.shade700,
-                    ),
-                  ),
-                  if (timeDifference.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(
-                        'Time Difference: $timeDifference',
-                        style: TextStyle(
-                          fontSize: size.width * 0.035,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ),
-                  if (dosage.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(
-                        'Dosage: $dosage',
-                        style: TextStyle(
-                          fontSize: size.width * 0.035,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ),
-                ],
+            TextSpan(
+              text: '$label ',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade700,
               ),
             ),
+            TextSpan(text: value)
           ],
         ),
       ),
     );
+  }
+
+// Updated notification function
+  Future<void> showVerificationLogNotification(Map<String, dynamic> log) async {
+    final bool isCorrect = log['verification_result'] ?? false;
+    final detected = List<String>.from(log['detected_pills'] ?? []);
+    final expected = List<String>.from(log['expected_pills'] ?? []);
+
+    final title = isCorrect ? 'Correct Medication' : 'Wrong Medication!';
+    final body = isCorrect
+        ? 'You took ${detected.join(', ')} correctly'
+        : _buildNotificationMessage(detected, expected);
+
+    await flutterLocalNotificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'log_notifications',
+          'Log Notifications',
+          channelDescription: 'Notifications for medication logs',
+          importance: Importance.max,
+          priority: Priority.high,
+          color: isCorrect ? Colors.green : Colors.red,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+    );
+  }
+
+  String _buildNotificationMessage(
+      List<String> detected, List<String> expected) {
+    final extraPills =
+        detected.where((pill) => !expected.contains(pill)).toList();
+    final missingPills =
+        expected.where((pill) => !detected.contains(pill)).toList();
+
+    final buffer = StringBuffer();
+    if (extraPills.isNotEmpty) {
+      buffer.write('Unexpected: ${extraPills.join(', ')}. ');
+    }
+    if (missingPills.isNotEmpty) {
+      buffer.write('Missing: ${missingPills.join(', ')}. ');
+    }
+    if (buffer.isEmpty) buffer.write('Medication verification failed');
+
+    return buffer.toString();
   }
 
   Widget _buildSectionTitle(String title, Size size) {
