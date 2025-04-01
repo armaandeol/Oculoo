@@ -36,15 +36,53 @@ class _HomePageState extends State<HomePage> {
     final frequency = med['frequency'] as String? ?? 'Daily';
     final days = med['days'] as List<dynamic>? ?? [];
 
+    // Date is not matching the frequency schedule
     if (frequency == 'Daily') {
-      return true;
-    }
-
-    if (frequency == 'Weekly' || frequency == 'Custom') {
+      // Continue with daily check
+    } else if (frequency == 'Weekly' || frequency == 'Custom') {
       final dayName = DateFormat('EEEE').format(date);
-      return days.contains(dayName);
+      if (!days.contains(dayName)) {
+        return false;
+      }
     }
 
+    // If it's today, check if any scheduled time is valid (not more than 30 min in the past)
+    if (isSameDay(date, DateTime.now())) {
+      return hasValidMedicationTime(med);
+    }
+
+    // For future dates, show all medications scheduled for that day
+    return true;
+  }
+
+  // New method to check if a medication has any valid scheduled times
+  bool hasValidMedicationTime(Map<String, dynamic> med) {
+    List<dynamic> timesList = med['times'] as List<dynamic>? ?? [];
+    if (timesList.isEmpty) return false;
+
+    DateTime now = DateTime.now();
+    DateTime cutoffTime = now.subtract(const Duration(minutes: 30));
+
+    for (var t in timesList) {
+      try {
+        List<String> parts = (t as String).split(":");
+        int hour = int.parse(parts[0]);
+        int minute = int.parse(parts[1]);
+
+        DateTime scheduleTime =
+            DateTime(now.year, now.month, now.day, hour, minute);
+
+        // If this scheduled time is after our cutoff (not more than 30 min old)
+        if (scheduleTime.isAfter(cutoffTime)) {
+          return true;
+        }
+      } catch (e) {
+        print('Error parsing time: $e');
+        continue;
+      }
+    }
+
+    // No valid times found
     return false;
   }
 
