@@ -38,15 +38,22 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
   // Add this method to check for pending notifications
   Future<void> _checkNotifications() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      print('Guardian not logged in');
+      return;
+    }
 
     try {
+      print('Checking notifications for guardian: ${user.uid}');
+
       // Check for pending linkage requests
       final linkageSnapshot = await FirebaseFirestore.instance
           .collection('linkages')
           .where('guardianUID', isEqualTo: user.uid)
           .where('status', isEqualTo: 'pending')
           .get();
+
+      print('Found ${linkageSnapshot.docs.length} pending linkage requests');
 
       // Check for medicine taken notifications
       final medicineSnapshot = await FirebaseFirestore.instance
@@ -56,9 +63,12 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
           .where('read', isEqualTo: false)
           .get();
 
+      print('Found ${medicineSnapshot.docs.length} medicine notifications');
+
       setState(() {
         _notificationCount =
             linkageSnapshot.docs.length + medicineSnapshot.docs.length;
+        print('Total notification count: $_notificationCount');
       });
     } catch (e) {
       print("Error checking notifications: $e");
