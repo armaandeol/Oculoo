@@ -78,7 +78,18 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
       String imageUrl = await uploadImage(_image!);
       print('Image uploaded successfully: $imageUrl');
 
-      await _firestore.collection('Medications').add({
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('User not logged in');
+        return;
+      }
+
+      // Save to correct Medications collection
+      await _firestore
+          .collection('patient')
+          .doc(user.uid)
+          .collection('Medications')
+          .add({
         'image_url': imageUrl,
         'uploaded_at': FieldValue.serverTimestamp(),
       });
@@ -86,31 +97,34 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
       await notifyFlaskServer(imageUrl);
 
       // Get the patient's guardians
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final guardiansSnapshot = await _firestore
-            .collection('patient')
-            .doc(user.uid)
-            .collection('linkages')
-            .where('status', isEqualTo: 'accepted')
-            .get();
+      print('Getting guardians for patient: ${user.uid}');
+      final guardiansSnapshot = await _firestore
+          .collection('patient')
+          .doc(user.uid)
+          .collection('linkages')
+          .where('status', isEqualTo: 'accepted')
+          .get();
 
-        // Create notifications for each guardian
-        for (var doc in guardiansSnapshot.docs) {
-          final guardianId = doc.id;
-          await _firestore
-              .collection('guardian')
-              .doc(guardianId)
-              .collection('notifications')
-              .add({
-            'type': 'medicine_taken',
-            'patientId': user.uid,
-            'patientName': user.displayName ?? 'Patient',
-            'timestamp': FieldValue.serverTimestamp(),
-            'read': false,
-            'imageUrl': imageUrl,
-          });
-        }
+      print('Found ${guardiansSnapshot.docs.length} guardians');
+
+      // Create notifications for each guardian
+      for (var doc in guardiansSnapshot.docs) {
+        final guardianId = doc.id;
+        print('Creating notification for guardian: $guardianId');
+
+        await _firestore
+            .collection('guardian')
+            .doc(guardianId)
+            .collection('notifications')
+            .add({
+          'type': 'medicine_taken',
+          'patientId': user.uid,
+          'patientName': user.displayName ?? 'Patient',
+          'timestamp': FieldValue.serverTimestamp(),
+          'read': false,
+          'imageUrl': imageUrl,
+        });
+        print('Notification created for guardian: $guardianId');
       }
 
       showDialog(
