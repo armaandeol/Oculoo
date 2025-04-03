@@ -41,14 +41,24 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
     if (user == null) return;
 
     try {
-      final snapshot = await FirebaseFirestore.instance
+      // Check for pending linkage requests
+      final linkageSnapshot = await FirebaseFirestore.instance
           .collection('linkages')
           .where('guardianUID', isEqualTo: user.uid)
           .where('status', isEqualTo: 'pending')
           .get();
 
+      // Check for medicine taken notifications
+      final medicineSnapshot = await FirebaseFirestore.instance
+          .collection('guardian')
+          .doc(user.uid)
+          .collection('notifications')
+          .where('read', isEqualTo: false)
+          .get();
+
       setState(() {
-        _notificationCount = snapshot.docs.length;
+        _notificationCount =
+            linkageSnapshot.docs.length + medicineSnapshot.docs.length;
       });
     } catch (e) {
       print("Error checking notifications: $e");

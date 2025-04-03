@@ -85,6 +85,34 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
 
       await notifyFlaskServer(imageUrl);
 
+      // Get the patient's guardians
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final guardiansSnapshot = await _firestore
+            .collection('patient')
+            .doc(user.uid)
+            .collection('linkages')
+            .where('status', isEqualTo: 'accepted')
+            .get();
+
+        // Create notifications for each guardian
+        for (var doc in guardiansSnapshot.docs) {
+          final guardianId = doc.id;
+          await _firestore
+              .collection('guardian')
+              .doc(guardianId)
+              .collection('notifications')
+              .add({
+            'type': 'medicine_taken',
+            'patientId': user.uid,
+            'patientName': user.displayName ?? 'Patient',
+            'timestamp': FieldValue.serverTimestamp(),
+            'read': false,
+            'imageUrl': imageUrl,
+          });
+        }
+      }
+
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
