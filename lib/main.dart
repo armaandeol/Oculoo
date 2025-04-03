@@ -3,15 +3,23 @@ import 'package:flutter/material.dart';
 import 'package:oculoo02/Guardian/home.dart';
 import 'package:oculoo02/Patient/home_screen.dart';
 import 'package:oculoo02/presentation/auth/sign_in.dart';
+import 'package:oculoo02/services/firebase_messaging_service.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'Guardian/home.dart';
 import 'auth.dart';
 import 'package:timezone/data/latest.dart' as tz;
 
+// Global instance of messaging service
+final firebaseMessagingService = FirebaseMessagingService();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize FCM
+  await firebaseMessagingService.init();
+
   tz.initializeTimeZones();
   runApp(MyApp());
 }

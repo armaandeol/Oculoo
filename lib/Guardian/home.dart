@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:oculoo02/Guardian/notifications_page.dart';
 import 'package:oculoo02/presentation/auth/sign_in.dart';
+import 'package:oculoo02/Guardian/notifications_screen.dart';
 
 class AppColors {
   static const Color primary = Color(0xFF6C5CE7);
@@ -55,23 +56,23 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
 
       print('Found ${linkageSnapshot.docs.length} pending linkage requests');
 
-      // Check for medicine taken notifications
-      final medicineSnapshot = await FirebaseFirestore.instance
-          .collection('guardian')
-          .doc(user.uid)
-          .collection('notifications')
+      // Check for medication notifications
+      final medicationSnapshot = await FirebaseFirestore.instance
+          .collection('guardian_notifications')
+          .where('guardianUid', isEqualTo: user.uid)
           .where('read', isEqualTo: false)
           .get();
 
-      print('Found ${medicineSnapshot.docs.length} medicine notifications');
+      print('Found ${medicationSnapshot.docs.length} medication notifications');
 
       setState(() {
         _notificationCount =
-            linkageSnapshot.docs.length + medicineSnapshot.docs.length;
+            linkageSnapshot.docs.length + medicationSnapshot.docs.length;
         print('Total notification count: $_notificationCount');
       });
     } catch (e) {
       print("Error checking notifications: $e");
+      print("Error details: ${e.toString()}");
     }
   }
 
@@ -147,14 +148,10 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
             onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (context) => NotificationsPage())).then((result) {
-              // Refresh the patient list if returned value is true
-              if (result == true) {
-                _loadLinkedPatients();
-              } else {
-                _checkNotifications();
-              }
-            }),
+                    builder: (context) => NotificationsScreen(
+                          guardianUid:
+                              FirebaseAuth.instance.currentUser?.uid ?? '',
+                        ))).then((_) => _checkNotifications()),
             backgroundColor: AppColors.primary,
             child: Icon(Icons.notifications, color: Colors.white),
             tooltip: 'Notifications',

@@ -21,6 +21,7 @@ dependencies:
   image_picker:
   qr_flutter: ^4.0.0
   flutter_local_notifications:
+  firebase_messaging: ^14.7.10
 
 dev_dependencies:
   flutter_test:
