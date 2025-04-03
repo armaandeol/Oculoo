@@ -19,72 +19,103 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Linkage Requests'),
+        title: const Text('Notifications'),
         backgroundColor: Color(0xFF6C5CE7),
       ),
       body: user == null
-          ? Center(child: Text('Please sign in to view requests'))
+          ? Center(child: Text('Please sign in to view notifications'))
           : StreamBuilder<QuerySnapshot>(
-              // Modified query to avoid requiring a composite index
               stream: FirebaseFirestore.instance
-                  .collection('linkages')
-                  .where('guardianUID', isEqualTo: user.uid)
-                  .where('status', isEqualTo: 'pending')
+                  .collection('guardian')
+                  .doc(user.uid)
+                  .collection('notifications')
+                  .orderBy('timestamp', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Error: ${snapshot.error}'),
-                  );
+                  return Center(child: Text('Error: ${snapshot.error}'));
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final notifications = snapshot.data?.docs ?? [];
+
+                if (notifications.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.notifications_off,
-                            size: 80, color: Colors.grey[400]),
+                        Icon(Icons.notifications_none,
+                            size: 64, color: Colors.grey),
                         SizedBox(height: 16),
-                        Text(
-                          'No pending requests',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
-                          ),
-                        ),
+                        Text('No notifications yet',
+                            style: TextStyle(fontSize: 18, color: Colors.grey)),
                       ],
                     ),
                   );
                 }
 
-                // Sort the documents by timestamp client-side
-                final docs = snapshot.data!.docs;
-                docs.sort((a, b) {
-                  final aTime = a['timestamp'] as Timestamp?;
-                  final bTime = b['timestamp'] as Timestamp?;
-                  if (aTime == null) return 1;
-                  if (bTime == null) return -1;
-                  // Sort descending (newest first)
-                  return bTime.compareTo(aTime);
-                });
-
                 return ListView.builder(
-                  padding: EdgeInsets.all(16),
-                  itemCount: docs.length,
+                  itemCount: notifications.length,
                   itemBuilder: (context, index) {
-                    final doc = docs[index];
+                    final doc = notifications[index];
                     final data = doc.data() as Map<String, dynamic>;
+                    final timestamp = (data['timestamp'] as Timestamp).toDate();
+                    final dateString =
+                        DateFormat('MMM dd, yyyy HH:mm').format(timestamp);
 
-                    final timestamp = data['timestamp'] as Timestamp?;
-                    final dateString = timestamp != null
-                        ? DateFormat.yMMMd().add_jm().format(timestamp.toDate())
-                        : 'Unknown time';
+                    if (data['type'] == 'medicine_taken') {
+                      return Card(
+                        margin: const EdgeInsets.all(8.0),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Color(0xFF6C5CE7).withOpacity(0.1),
+                            child: Icon(Icons.medical_services,
+                                color: Color(0xFF6C5CE7)),
+                          ),
+                          title: Text(
+                              '${data['patientName']} took their medicine'),
+                          subtitle: Text(dateString),
+                          trailing: IconButton(
+                            icon: Icon(Icons.check_circle_outline),
+                            onPressed: () async {
+                              await doc.reference.update({'read': true});
+                            },
+                          ),
+                          onTap: () {
+                            // Show the medicine image in a dialog
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: Text('Medicine Verification'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Image.network(data['imageUrl']),
+                                    SizedBox(height: 16),
+                                    Text(
+                                        '${data['patientName']} took their medicine at $dateString'),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      doc.reference.update({'read': true});
+                                    },
+                                    child: Text('Mark as Read'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    }
 
+                    // Existing linkage request card
                     return Card(
                       elevation: 4,
                       margin: EdgeInsets.only(bottom: 16),
