@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({Key? key}) : super(key: key);
@@ -12,6 +13,54 @@ class NotificationsPage extends StatefulWidget {
 
 class _NotificationsPageState extends State<NotificationsPage> {
   bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupFCM();
+  }
+  
+  Future<void> _setupFCM() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    // Request notification permissions
+    NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true, 
+      sound: true,
+    );
+    
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      print('User granted permission');
+      
+      // Get the token
+      String? token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        // Save the token to Firestore
+        await _saveTokenToFirestore(token);
+        
+        // Listen for token refreshes
+        FirebaseMessaging.instance.onTokenRefresh.listen(_saveTokenToFirestore);
+      }
+    }
+  }
+  
+  Future<void> _saveTokenToFirestore(String token) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    // Save the FCM token to the guardian's document
+    await FirebaseFirestore.instance
+      .collection('guardian')
+      .doc(user.uid)
+      .set({
+        'fcmToken': token,
+        'lastTokenUpdate': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    
+    print('FCM Token saved: $token');
+  }
 
   @override
   Widget build(BuildContext context) {

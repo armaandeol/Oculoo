@@ -604,7 +604,9 @@ class _HomePageState extends State<HomePage> {
             if (filteredDocs.isEmpty) {
               return Padding(
                 padding: EdgeInsets.symmetric(vertical: size.height * 0.02),
-                child: Center(child: Text('No medications for selected date')),
+                child: Center(child: Text('No medications for selected date', 
+                  style: TextStyle(color: Colors.white),
+                )),
               );
             }
 
@@ -843,7 +845,9 @@ class _HomePageState extends State<HomePage> {
             if (docs.isEmpty) {
               return Padding(
                 padding: EdgeInsets.symmetric(vertical: size.height * 0.02),
-                child: const Center(child: Text('No logs available')),
+                child: const Center(child: Text('No logs available', 
+                  style: TextStyle(color: Colors.white),
+                )),
               );
             }
 
@@ -858,7 +862,17 @@ class _HomePageState extends State<HomePage> {
                     List<String>.from(log['detected_pills'] ?? []);
                 final expectedPills =
                     List<String>.from(log['expected_pills'] ?? []);
-                final timestamp = DateTime.parse(log['timestamp'] as String);
+                
+                // Handle timestamp that could be either Timestamp or String
+                final DateTime timestamp;
+                if (log['timestamp'] is Timestamp) {
+                  timestamp = (log['timestamp'] as Timestamp).toDate();
+                } else if (log['timestamp'] is String) {
+                  timestamp = DateTime.parse(log['timestamp'] as String);
+                } else {
+                  timestamp = DateTime.now(); // Fallback
+                }
+                
                 final timeDiff = log['time_difference'] ?? 'N/A';
                 final ocrText = log['ocr_text'] ?? '';
                 final rawText = log['raw_ocr_text'] ?? '';

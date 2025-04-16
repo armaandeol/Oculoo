@@ -112,6 +112,7 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
         final guardianId = doc.id;
         print('Creating notification for guardian: $guardianId');
 
+        // Create notification document in Firestore
         await _firestore
             .collection('guardian')
             .doc(guardianId)
@@ -125,6 +126,34 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
           'imageUrl': imageUrl,
         });
         print('Notification created for guardian: $guardianId');
+        
+        // Get the guardian's FCM token
+        final guardianDoc = await _firestore
+            .collection('guardian')
+            .doc(guardianId)
+            .get();
+            
+        if (guardianDoc.exists) {
+          final guardianData = guardianDoc.data();
+          final fcmToken = guardianData?['fcmToken'];
+          
+          if (fcmToken != null) {
+            // Send FCM notification to the guardian
+            try {
+              await _sendFCMNotification(
+                token: fcmToken,
+                title: 'Medicine Alert',
+                body: '${user.displayName ?? 'Your patient'} has taken their medicine',
+                imageUrl: imageUrl,
+              );
+              print('FCM notification sent to guardian: $guardianId');
+            } catch (e) {
+              print('Error sending FCM notification: $e');
+            }
+          } else {
+            print('Guardian has no FCM token: $guardianId');
+          }
+        }
       }
 
       showDialog(
@@ -160,6 +189,31 @@ class _LogMedicinePageState extends State<LogMedicinePage> {
       );
       print("Error uploading image: $e");
     }
+  }
+  
+  // Add this method to send FCM notifications using Firebase Cloud Functions
+  Future<void> _sendFCMNotification({
+    required String token,
+    required String title,
+    required String body,
+    String? imageUrl,
+  }) async {
+    // For a complete solution, you would set up a Firebase Cloud Function 
+    // to handle sending FCM messages securely.
+    // This is a placeholder for where that API call would go.
+    
+    // In a production app, you should NOT include FCM server logic in client code
+    // Instead, trigger a cloud function by adding a document to a Firestore collection
+    await _firestore.collection('fcm_requests').add({
+      'token': token,
+      'title': title,
+      'body': body,
+      'imageUrl': imageUrl,
+      'timestamp': FieldValue.serverTimestamp(),
+      'processed': false
+    });
+    
+    print('FCM request queued for processing');
   }
 
   Future<void> _showQRCodeDialog(BuildContext context) async {

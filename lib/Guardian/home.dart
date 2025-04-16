@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:oculoo02/Guardian/notifications_page.dart';
 import 'package:oculoo02/presentation/auth/sign_in.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class AppColors {
   static const Color primary = Color(0xFF6C5CE7);
@@ -33,6 +34,76 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
     super.initState();
     _loadLinkedPatients();
     _checkNotifications(); // Add this to check notifications on init
+    _setupFCM(); // Add FCM setup
+  }
+
+  // Initialize Firebase Messaging
+  Future<void> _setupFCM() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // Request permission for notifications
+      NotificationSettings settings =
+          await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        print('User granted FCM permission');
+
+        // Get the FCM token
+        String? token = await FirebaseMessaging.instance.getToken();
+        if (token != null) {
+          // Save the token to Firestore
+          await _saveTokenToFirestore(token);
+
+          // Set up token refresh listener
+          FirebaseMessaging.instance.onTokenRefresh
+              .listen(_saveTokenToFirestore);
+        }
+
+        // Handle foreground messages
+        FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+          print('Got a message whilst in the foreground!');
+          print('Message data: ${message.data}');
+
+          if (message.notification != null) {
+            print(
+                'Message also contained a notification: ${message.notification}');
+
+            // Check for new notifications and update badge
+            _checkNotifications();
+          }
+        });
+      } else {
+        print('User declined FCM permission');
+      }
+    } catch (e) {
+      print("Error setting up FCM: $e");
+    }
+  }
+
+  // Save FCM token to Firestore
+  Future<void> _saveTokenToFirestore(String token) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('guardian')
+          .doc(user.uid)
+          .set({
+        'fcmToken': token,
+        'lastTokenUpdate': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      print('FCM token saved successfully: $token');
+    } catch (e) {
+      print('Error saving FCM token: $e');
+    }
   }
 
   // Add this method to check for pending notifications
@@ -455,21 +526,304 @@ class _GuardianHomePageState extends State<GuardianHomePage> {
   }
 }
 
-class _PatientCard extends StatelessWidget {
+class _PatientCard extends StatefulWidget {
   final String patientId;
 
   const _PatientCard({required this.patientId});
 
   @override
+  _PatientCardState createState() => _PatientCardState();
+}
+
+class _PatientCardState extends State<_PatientCard> {
+  String? patientName;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPatientNameFromGuardian();
+  }
+
+  Future<void> _fetchPatientNameFromGuardian() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // First check guardian's listing collection for name
+      final guardianListingSnapshot = await FirebaseFirestore.instance
+          .collection('guardian')
+          .doc(user.uid)
+          .collection('listing')
+          .where('uid', isEqualTo: widget.patientId)
+          .get();
+
+      if (guardianListingSnapshot.docs.isNotEmpty) {
+        final listingData = guardianListingSnapshot.docs.first.data();
+        print(
+            "Guardian listing data for patient ${widget.patientId}: $listingData");
+
+        if (listingData['name'] != null) {
+          if (mounted) {
+            setState(() {
+              patientName = listingData['name'];
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print("Error fetching from guardian listing: $e");
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // If we already have the patient name from guardian listing, use it
+    if (patientName != null) {
+      return Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        elevation: 2,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PatientDetailPage(
+                patientId: widget.patientId,
+                patientName: patientName!,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.person_outline, color: AppColors.primary),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(patientName!,
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary)),
+                      const SizedBox(height: 4),
+                      Text("Patient ID: ${widget.patientId}",
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Otherwise, fall back to the original implementation
     return FutureBuilder<DocumentSnapshot>(
-      future:
-          FirebaseFirestore.instance.collection('patient').doc(patientId).get(),
+      future: FirebaseFirestore.instance
+          .collection('patient')
+          .doc(widget.patientId)
+          .get(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return const SizedBox.shrink();
+        // Show loading state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 16),
+                  Text("Loading patient data...",
+                      style: TextStyle(color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          );
         }
 
+        // Show error state
+        if (snapshot.hasError) {
+          print("Error loading patient data: ${snapshot.error}");
+          return Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            color: AppColors.error.withOpacity(0.1),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: AppColors.error),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text("Error loading patient: ${widget.patientId}",
+                        style: TextStyle(color: AppColors.error)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // If document doesn't exist
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          print("Patient document not found: ${widget.patientId}");
+
+          // Instead of showing "Unknown Patient", fetch data from patient collection
+          return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('patient')
+                  .doc(widget.patientId)
+                  .get(),
+              builder: (context, patientSnapshot) {
+                // Loading state while fetching patient data
+                if (patientSnapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15)),
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 16),
+                          Text("Loading patient data...",
+                              style: TextStyle(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                // Get patient name if document exists
+                String patientName = "Unknown Patient";
+                if (patientSnapshot.hasData && patientSnapshot.data!.exists) {
+                  final patientData =
+                      patientSnapshot.data!.data() as Map<String, dynamic>;
+
+                  // Debug: Print the entire patient data structure
+                  print("Patient data for ${widget.patientId}: $patientData");
+
+                  // Try different possible field names for patient name
+                  if (patientData['name'] != null) {
+                    patientName = patientData['name'];
+                  } else if (patientData['fullName'] != null) {
+                    patientName = patientData['fullName'];
+                  } else if (patientData['userName'] != null) {
+                    patientName = patientData['userName'];
+                  } else if (patientData['displayName'] != null) {
+                    patientName = patientData['displayName'];
+                  } else if (patientData['profile'] != null &&
+                      patientData['profile']['name'] != null) {
+                    patientName = patientData['profile']['name'];
+                  } else {
+                    // If we can't find any name field, use the email or phone
+                    patientName = patientData['email'] ??
+                        patientData['phone'] ??
+                        "Patient ${widget.patientId}";
+                  }
+                } else {
+                  print("No patient data found for ID: ${widget.patientId}");
+                }
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15)),
+                  elevation: 2,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(15),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PatientDetailPage(
+                          patientId: widget.patientId,
+                          patientName: patientName,
+                        ),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(Icons.person_outline,
+                                color: AppColors.primary),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(patientName,
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary)),
+                                const SizedBox(height: 4),
+                                Text("Patient ID: ${widget.patientId}",
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right,
+                              color: AppColors.textSecondary),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              });
+        }
+
+        // Normal case - document exists
         final data = snapshot.data!.data() as Map<String, dynamic>;
         final name = data['name'] ?? 'Unknown Patient';
         final lastMedication = data['lastMedication'] ?? 'N/A';
@@ -486,7 +840,7 @@ class _PatientCard extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => PatientDetailPage(
-                  patientId: patientId,
+                  patientId: widget.patientId,
                   patientName: name,
                 ),
               ),
@@ -937,7 +1291,6 @@ class _PatientDetailPageState extends State<PatientDetailPage>
         final filteredLogs = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           if (data['timestamp'] == null) return false;
-
           final timestamp = (data['timestamp'] as Timestamp).toDate();
           return timestamp.year == _selectedDate.year &&
               timestamp.month == _selectedDate.month &&
@@ -1013,14 +1366,11 @@ class _PatientDetailPageState extends State<PatientDetailPage>
                   ),
                   child: Icon(logIcon, color: iconColor),
                 ),
-                title: Text(
-                  log['title'] ?? _getLogTitle(log, logType),
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+                title: Text(_getLogTitle(log, logType),
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1028,17 +1378,13 @@ class _PatientDetailPageState extends State<PatientDetailPage>
                     Text(
                       DateFormat.jm().format(timestamp), // Show time only
                       style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
+                          fontSize: 12, color: AppColors.textSecondary),
                     ),
                     if (log['notes'] != null)
                       Text(
                         log['notes'],
                         style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
+                            fontSize: 12, color: AppColors.textSecondary),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1053,7 +1399,6 @@ class _PatientDetailPageState extends State<PatientDetailPage>
     );
   }
 
-// Helper method to generate a title for the log entry based on its content
   String _getLogTitle(Map<String, dynamic> log, String logType) {
     switch (logType.toLowerCase()) {
       case 'medication':
@@ -1061,16 +1406,12 @@ class _PatientDetailPageState extends State<PatientDetailPage>
       case 'symptom':
         return 'Symptom recorded: ${log['symptom'] ?? 'Unknown'}';
       case 'measurement':
-        if (log['measurement'] != null) {
-          return '${log['measurement']}: ${log['value'] ?? ''} ${log['unit'] ?? ''}';
-        }
-        return 'Health measurement';
+        return '${log['measurement']}: ${log['value'] ?? ''} ${log['unit'] ?? ''}';
       default:
         return 'Health log entry';
     }
   }
 
-// Show a dialog with detailed log information
   void _showLogDetails(Map<String, dynamic> log, DateTime timestamp) {
     showDialog(
       context: context,
@@ -1086,6 +1427,7 @@ class _PatientDetailPageState extends State<PatientDetailPage>
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
+              const Divider(),
               if (log['medicine'] != null) ...[
                 Text('Medicine: ${log['medicine']}'),
                 const SizedBox(height: 4),
